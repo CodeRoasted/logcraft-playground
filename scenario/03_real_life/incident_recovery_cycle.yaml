@@ -190,3 +190,10 @@ scenario:
         - target: payment-api
           latency_multiplier: 6
           error_rate: 0.45
+
+insight:
+  detection:
+    pyramid:
+      time_to_maturity: 10m
+  explain:
+    mode: rules
