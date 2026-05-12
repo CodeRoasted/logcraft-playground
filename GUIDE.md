@@ -421,11 +421,72 @@ behavior when they cross thresholds.
 
 → [State & Effects](scenario_reference.md#state--effects)
 
-### Templates
+### Templates — reusable agent presets
 
-Define reusable agent presets and inherit from them with `use: template_name`.
+Define a named agent profile once and inherit it with `use: template_name`. Override
+only what differs per instance.
+
+```yaml
+templates:
+  go_service:
+    rate: 200/s
+    error_rate: 0.005
+    latency_ms: {distribution: normal, mean: 15, stddev: 4}
+
+agents:
+  - name: user-service
+    use: go_service          # inherits everything above
+    error_rate: 0.02         # override just this one value
+  - name: order-service
+    use: go_service          # same baseline
+```
+
+Templates keep large multi-agent scenarios DRY. Define your standard microservice
+profile, your database profile, your cache profile — then compose.
 
 → [Templates](scenario_reference.md#templates)
+
+### Includes — splitting scenarios across files
+
+`includes:` merges other YAML files into your scenario before parsing. Useful for
+separating shared templates, incident libraries, or topology definitions that you
+reuse across multiple scenarios.
+
+```yaml
+includes:
+  - ./shared/templates.yaml
+  - ./incidents/black_friday.yaml
+
+agents:
+  - name: api
+    use: go_service    # defined in templates.yaml
+```
+
+→ [Includes](scenario_reference.md#includes)
+
+### Registry — versioned agent library
+
+The registry is the production-scale version of includes: a named, versioned library
+of agent files you instantiate by reference with per-instance overrides. This is how
+the `scenario/agents/` directory is designed to be used at scale.
+
+```yaml
+registry:
+  sources: [scenario/agents/]    # auto-discovers all agent YAML files
+  nginx:
+    v1: scenario/agents/nginx_v1.yaml
+    v2: scenario/agents/nginx_v2.yaml
+
+  agents:
+    - ref: "nginx:v2"
+      name: frontend
+      overrides: {rate_per_second: 500, instances: 3}
+    - ref: "nginx:v2"
+      name: internal-proxy
+      overrides: {rate_per_second: 50}
+```
+
+→ [Registry](scenario_reference.md#registry)
 
 ### Noise injection
 
@@ -437,23 +498,48 @@ Simulate pipeline imperfections: duplicated records, missing fields, timing jitt
 
 ## Deterministic mode
 
-By default, every run produces different logs — the randomization is seeded from the
-system clock, so each run is unique.
+By default, every run produces different logs — randomization seeds from the system
+clock, so each run is unique.
 
-Add `seed:` to lock the random seed and make every run produce the exact same logs:
+Add `seed:` to freeze the random seed:
 
 ```yaml
 scenario:
-  seed: 42          # Same seed → same logs every run
+  seed: 42
 ```
 
-This requires [CodeRoast](https://coderoast.fr). The free CLI always produces
-randomized runs.
+With `seed:` set, LogCraft produces **bit-for-bit identical output on every run** —
+same log records, same field values, same timestamps, same sequence, same count. Run
+it today or in six months, on your laptop or in CI, and you get the exact same stream.
+Not "statistically similar". Byte-identical. Every weighted choice, every range
+sample, every distribution draw, every incident trigger, every phase transition —
+all locked.
 
-Why is deterministic mode useful? Primarily for regression testing: when you want to
-verify that your log analysis tool produces the same detections given the same input,
-you need the input to be identical across runs. It's also useful for reproducible
-demos and for sharing "here is the exact scenario I ran" with a colleague.
+**This requires [CodeRoast](https://coderoast.fr).** The free CLI always produces
+unique randomized runs.
+
+### Why does this matter?
+
+**Regression testing.** You're building a log parser, anomaly detector, or alerting
+rule. Does your code change produce different results? Without a fixed input you can't
+tell — a change in output might be your code, or it might just be different random
+numbers. With `seed:`, the input is frozen. Any change in your tool's output means
+exactly one thing: your code changed something.
+
+**CI test fixtures.** Generate a scenario once, check the output JSONL into your
+test suite. Every CI run gets identical input — tests never fail because "the random
+data was different today".
+
+**Reproducible bug reports.** "Run `logcraft scenario.yaml` with `seed: 42` and
+you'll see exactly what I saw." Without `seed:`, the other person gets a different
+run and can't reproduce the problem.
+
+**Multi-machine consistency.** Two engineers, two machines, two timezones. With
+`seed:`, they get the same logs. Without it, they don't.
+
+The free CLI is the right tool for exploration, development, and one-shot generation.
+When you need the scenario to be a stable artifact — something you can pin, version,
+share, and rely on in CI — that's `seed:`, and that's CodeRoast.
 
 ---
 
