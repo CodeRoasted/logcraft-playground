@@ -565,6 +565,14 @@ run and can't reproduce the problem.
 **Multi-machine consistency.** Two engineers, two machines, two timezones. With
 `seed:`, they get the same logs. Without it, they don't.
 
+**Timeline scrubbing.** In CodeRoast Lab, deterministic scenarios have a seek bar.
+Jump to minute 8, scrub back to minute 2, skip to minute 47 — instantly. The engine
+re-runs from seed to the target time in the background; because the output is
+bit-for-bit identical every time, the state at any timestamp is always reproducible
+on demand. Non-deterministic scenarios can't be scrubbed — the random state at
+minute 23 depends on every event that happened in minutes 0–22, and without a fixed
+seed there's no way to recover it without running the whole thing again.
+
 ### Why seed is better than replay
 
 Replay answers "same logs again" by playing back a fixed file. `seed:` answers the
