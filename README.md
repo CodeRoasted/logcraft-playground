@@ -36,4 +36,4 @@ Inside the full CodeRoast workspace, use `malf` from this package root:
 malf build .
 ```
 
-The build requires `logcraft_core/1.3.5`. Scenario YAML remains editable and inspectable without that dependency.
+The build requires `logcraft_core/1.3.6`. Scenario YAML remains editable and inspectable without that dependency.
