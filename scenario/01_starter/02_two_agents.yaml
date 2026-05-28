@@ -48,7 +48,3 @@ scenario:
           max: 200
           integer: true
 
-  interactions:
-    - from: web-server
-      to: database
-      type: dependency

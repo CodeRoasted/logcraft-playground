@@ -1,21 +1,13 @@
 # Advanced 04 — Automatic Cascade
 # Declare a dependency graph; auto_cascade propagates degradation through it automatically.
-# No manual rules needed: when Postgres fails, the cascade walks the interaction graph.
+# No manual rules needed: when Postgres fails, the cascade walks the dependency graph.
 # Concepts: auto_cascade (error_threshold, dampening_factor, blast_radius), interactions
 
 scenario:
   name: auto-cascade
   duration_seconds: 10m
 
-  interactions:
-    - {from: frontend, to: api-gateway, type: request}
-    - {from: api-gateway, to: user-service, type: request}
-    - {from: api-gateway, to: order-service, type: request}
-    - {from: order-service, to: postgres, type: dependency}
-    - {from: order-service, to: redis-cache, type: dependency}
-    - {from: user-service, to: postgres, type: dependency}
-
-  # auto_cascade walks the interaction graph and propagates degradation automatically.
+  # auto_cascade walks the dependency graph and propagates degradation automatically.
   # blast_radius: max hops. dampening_factor: each hop reduces the effect by 50%.
   auto_cascade:
     error_threshold: 0.05         # start propagating when any agent's error_rate > 5%

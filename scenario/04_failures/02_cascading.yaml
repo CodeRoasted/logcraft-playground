@@ -7,11 +7,6 @@ scenario:
   name: cascading-failure
   duration_seconds: 10m
 
-  interactions:
-    - {from: api-gateway, to: order-service, type: request}
-    - {from: order-service, to: postgres, type: dependency}
-    - {from: order-service, to: redis-cache, type: dependency}
-
   # Disk I/O storm at minute 3; cache fails under the resulting pressure at minute 4
   incidents:
     - name: disk_io_storm

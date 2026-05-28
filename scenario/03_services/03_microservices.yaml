@@ -27,13 +27,6 @@ scenario:
           - {from: 3, to: 0, probability: 0.10}   # recovering → healthy
           - {from: 3, to: 2, probability: 0.02}   # recovering → relapse
 
-  interactions:
-    - {from: api-gateway, to: user-service, type: request}
-    - {from: api-gateway, to: order-service, type: request}
-    - {from: order-service, to: inventory-service, type: dependency}
-    - {from: order-service, to: notification-service, type: request}
-    - {from: user-service, to: auth-service, type: dependency}
-
   agents:
     - name: api-gateway
       use_template: go_api

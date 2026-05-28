@@ -53,7 +53,7 @@ are available to the free CLI.
 - [Phases](#phases)
 - [Latency](#latency)
 - [Templates](#templates)
-- [Interactions](#interactions)
+- [Causal Flows](#causal-flows)
 - [Rules](#rules)
 - [Incidents](#incidents)
 - [Health State Machine](#health-state-machine)
@@ -66,7 +66,6 @@ are available to the free CLI.
 - [Field Variations](#field-variations)
 - [Log Format](#log-format)
 - [System Archetypes](#system-archetypes)
-  - [Request Flow](#request-flow)
   - [Contention](#contention)
   - [Slow Queries](#slow-queries)
   - [Availability](#availability)
@@ -110,7 +109,7 @@ scenario:
 | `field_variations` | sequence | absent | Numeric field jitter config |
 | `log_format` | map | absent | Output field selection |
 | `templates` | map | absent | Named reusable agent presets |
-| `interactions` | sequence | absent | Cross-agent dependency declarations |
+| `flows` | sequence | absent | Causal flows — deterministic instanced traces (see [Causal Flows](#causal-flows)) |
 | `rules` | sequence | absent | Propagation rules |
 | `incidents` | sequence | absent | Time- or probability-triggered events |
 | `auto_cascade` | map | absent | Automatic error cascading |
@@ -298,7 +297,6 @@ agents:
 | `slow_queries` | map | absent | Probabilistic slow operations |
 | `availability` | map | absent | Uptime and failure mode |
 | `failures` | map | absent | Burst failure patterns |
-| `request_flow` | sequence | `[]` | Distributed call chain |
 | `contention` | map | absent | Connection pool limits |
 | `outputs` | sequence | `[]` | Route to specific named outputs (empty = all) |
 
@@ -656,30 +654,76 @@ agents:
 
 ---
 
-## Interactions
+## Causal Flows
 
-Declare the communication topology between agents. Used by auto-cascade and rules to
-determine propagation paths. `type:` is metadata only — it does not affect engine
-behavior.
+Causal flows model distributed traces/workflows as deterministic, **instanced** state
+machines. Each flow spawns new trace *instances* at `instance_rate_per_second`; an instance
+walks the state graph from `start`, emitting one record per visited state **through the bound
+agent (service)**, carrying a shared correlation id, until it reaches a state with no
+outgoing transition. This is the only construct that imposes a declared *order* on the event
+stream (rate-driven agents are unordered) — it is what gives a consumer a crisp causal /
+transition graph (e.g. InSight's `dominant_path`).
+
+Flows require **deterministic mode** (a scenario `seed`) and are ignored in real mode. Branch
+selection and step content are seeded per-instance, so the same scenario+seed replays
+bit-identically — adding a flow never shifts an agent's own content.
 
 ```yaml
-interactions:
-  - from: api-gateway
-    to: order-service
-    type: request
-  - from: order-service
-    to: postgres-primary
-    type: dependency
-  - from: order-service
-    to: redis-cache
-    type: cache_lookup
+flows:
+  - name: checkout
+    instance_rate_per_second: 50/s   # new trace instances per second
+    start_delay_seconds: 0           # when the flow begins spawning (duration format)
+    max_concurrent: 200              # cap in-flight instances (0 = unbounded; drop new on full)
+    correlation_field: trace_id      # field stamped on every step record of an instance
+    start: receive                   # initial state
+    states:                          # map: state-name -> step (emits 1 record via `agent`)
+      receive: { agent: nginx,    message_template: "GET /checkout" }
+      auth:    { agent: auth,     message_template: "verify {user}" }
+      charge:  { agent: payments, message_template: "charge {amount}" }
+      done:    { agent: nginx,    message_template: "200 checkout" }
+    transitions:                     # weighted edges; integer-ns inter-step delay
+      - { from: receive, to: auth,   network_latency_ms: 2 }
+      - { from: auth,    to: charge, weight: 0.98, network_latency_ms: 8 }
+      - { from: auth,    to: done,   weight: 0.02 }   # rare off-path branch
+      - { from: charge,  to: done,   network_latency_ms: 5 }
 ```
 
-| Key | Type | Required | Description |
-|-----|------|----------|-------------|
-| `from` | string | Yes | Calling agent name (validated post-parse) |
-| `to` | string | Yes | Called agent name (validated post-parse) |
-| `type` | string | No | Label: `request`, `dependency`, `query`, `cache_lookup`, etc. |
+### Flow Keys
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `name` | string | required | Flow name; also the correlation-id prefix (`name-<n>`) |
+| `instance_rate_per_second` | string/number | `1.0` | New trace instances spawned per second |
+| `start_delay_seconds` | string/number | `0` | Delay before spawning starts (duration format or seconds) |
+| `max_concurrent` | integer | `0` | Max in-flight instances; `0` = unbounded. On full, the new arrival is dropped |
+| `correlation_field` | string | `"trace_id"` | Field stamped on every step record of an instance |
+| `start` | string | required | Initial state name (must be a declared state) |
+| `states` | map | required | State name → step spec |
+| `transitions` | sequence | absent | Weighted directed edges between states |
+
+### Flow State Keys
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `agent` | string | required | Service the step logs through (must be a declared agent) |
+| `message_template` | string | `""` | Message with `{field}` placeholders |
+| `level` | string | the agent's `log_level` | Per-step log level |
+| `error_rate` | number | `0` | Per-step probability the record is escalated to `error` level |
+| `fields` | sequence | absent | Step-local field generators (same shape as agent `fields`) |
+
+### Flow Transition Keys
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `from` | string | required | Source state (must be declared) |
+| `to` | string | required | Target state (must be declared) |
+| `weight` | number | `1.0` | Relative weight among a state's outgoing edges (normalized) |
+| `network_latency_ms` | number | `0.0` | Inter-step delay before the target step |
+| `network_jitter_ms` | number | `0.0` | Uniform ± jitter on the inter-step delay |
+
+A state with no outgoing transition terminates the instance. Fan-out (a step touching
+several services) is modeled as sequential states — one agent per state keeps the causal
+path a clean linear chain.
 
 ---
 
@@ -902,7 +946,7 @@ Local hour calculation uses `time.timezone` and `time.offset_minutes`.
 ## Auto-Cascade
 
 Automatically propagates error and latency effects from failing agents to their
-dependents (declared via `interactions:` and `dependencies:`), without explicit rules.
+dependents (declared via `dependencies:`), without explicit rules.
 
 ```yaml
 auto_cascade:
@@ -1048,32 +1092,8 @@ log_format:
 
 ## System Archetypes
 
-System archetypes model production-grade service behavior patterns.
-
-### Request Flow
-
-Simulates distributed call chains with network latency and timeouts.
-
-```yaml
-agents:
-  - name: api-gateway
-    request_flow:
-      - call: auth-service
-        timeout_ms: 30
-        network_latency_ms: 2.0
-        network_jitter_ms: 0.5
-      - call: product-service
-        timeout_ms: 100
-```
-
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `call` | string | required | Target agent name (validated post-parse) |
-| `timeout_ms` | number | `0.0` | Request timeout; `0` = no timeout |
-| `network_latency_ms` | number | `0.0` | One-way base propagation delay |
-| `network_jitter_ms` | number | `0.0` | Uniform ±jitter on the base delay |
-
----
+System archetypes model production-grade service behavior patterns. (Distributed call
+chains with network latency are now modeled by [Causal Flows](#causal-flows).)
 
 ### Contention
 
@@ -1201,7 +1221,7 @@ includes:
 ```
 
 Paths are resolved relative to the including scenario file. Agents, templates,
-incidents, interactions, and rules are merged into the main config. Includes are
+incidents and rules are merged into the main config. Includes are
 processed recursively.
 
 ---

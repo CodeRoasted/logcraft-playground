@@ -41,16 +41,6 @@ scenario:
           latency_multiplier: 15
           error_rate: 0.25
 
-  interactions:
-    - from: api-gateway
-      to: order-service
-      type: request
-    - from: order-service
-      to: postgres
-      type: dependency
-    - from: order-service
-      to: redis-cache
-      type: dependency
 
   rules:
     - condition: "postgres.error_rate > 0.05"
