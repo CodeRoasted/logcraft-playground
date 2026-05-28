@@ -3,7 +3,7 @@
 # Concepts: phases, rate changes, latency distributions (uniform, normal, percentile)
 scenario:
   name: phases-demo
-  duration: 5m
+  duration_seconds: 5m
 
   outputs:
     - name: console
@@ -13,24 +13,24 @@ scenario:
   agents:
     - name: api-server
       type: web_server
-      rate: 5/s
+      rate_per_second: 5/s
       error_rate: 0.02
       message_template: "{method} {path} -> {status_code}"
       phases:
         - name: warmup
-          duration: 1m
-          rate: 2/s
+          duration_seconds: 1m
+          rate_per_second: 2/s
           latency_ms: [5, 20]
         - name: steady
-          duration: 2m
-          rate: 5/s
+          duration_seconds: 2m
+          rate_per_second: 5/s
           latency_ms:
             distribution: normal
             mean: 25
             stddev: 8
         - name: peak
-          duration: 2m
-          rate: 10/s
+          duration_seconds: 2m
+          rate_per_second: 10/s
           error_rate: 0.08
           latency_ms:
             distribution: percentile

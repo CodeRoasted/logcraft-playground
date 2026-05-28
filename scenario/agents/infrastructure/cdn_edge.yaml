@@ -2,7 +2,7 @@
 agent:
   name: cdn-edge
   type: proxy
-  rate: 2000/s
+  rate_per_second: 2000/s
   error_rate: 0.002
   latency_ms:
     distribution: percentile

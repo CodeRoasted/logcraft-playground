@@ -2,7 +2,7 @@
 agent:
   name: postgres
   type: database
-  rate: 300/s
+  rate_per_second: 300/s
   error_rate: 0.005
   contention:
     max_connections: 200

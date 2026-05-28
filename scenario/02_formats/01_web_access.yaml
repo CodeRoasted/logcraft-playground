@@ -5,12 +5,12 @@
 
 scenario:
   name: web-access-formats
-  duration: 2m
+  duration_seconds: 2m
 
   agents:
     - name: nginx
       type: web_server
-      rate: 20/s
+      rate_per_second: 20/s
       message_template: "{method} {path} -> {status_code}"
       fields:
         - name: remote_addr

@@ -5,12 +5,12 @@
 
 scenario:
   name: memory-pressure
-  duration: 8m
+  duration_seconds: 8m
 
   agents:
     - name: app-server
       type: worker
-      rate: 60/s
+      rate_per_second: 60/s
       error_rate: 0.005
       latency_ms:
         distribution: normal
@@ -20,20 +20,20 @@ scenario:
       state:
         queue_depth:
           initial: 0.0
-          max: 1.0
+          max_value: 1.0
           growth_per_request: 0.0005    # fills up over ~3 minutes at 60/s
         memory_used:
           initial: 0.2
-          max: 1.0
+          max_value: 1.0
           growth_per_request: 0.0002
       # Behavior changes as state variables cross thresholds
       effects:
-        - when: "queue_depth > 0.7"
+        - condition: "queue_depth > 0.7"
           latency_multiplier: 5.0
-        - when: "queue_depth > 0.9"
+        - condition: "queue_depth > 0.9"
           latency_multiplier: 15.0
           error_rate: 0.25
-        - when: "memory_used > 0.85"
+        - condition: "memory_used > 0.85"
           error_rate: 0.40
       message_template: "{job} queue_depth={queue_depth} mem={memory_used}"
       fields:
@@ -51,7 +51,7 @@ scenario:
 
     - name: health-monitor
       type: monitor
-      rate: 1/s    # one health probe per second
+      rate_per_second: 1/s    # one health probe per second
       message_template: "health check: {status}"
       fields:
         - name: status

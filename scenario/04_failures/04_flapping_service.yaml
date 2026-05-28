@@ -5,12 +5,12 @@
 
 scenario:
   name: flapping-service
-  duration: 10m
+  duration_seconds: 10m
 
   agents:
     - name: payment-api
       type: api_service
-      rate: 40/s
+      rate_per_second: 40/s
       error_rate: 0.01
       latency_ms:
         distribution: percentile
@@ -45,7 +45,7 @@ scenario:
 
     - name: fraud-detector
       type: ml_service
-      rate: 40/s    # called for every payment attempt
+      rate_per_second: 40/s    # called for every payment attempt
       error_rate: 0.005
       latency_ms:
         distribution: percentile

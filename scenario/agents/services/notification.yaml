@@ -2,7 +2,7 @@
 agent:
   name: notification-service
   type: api_service
-  rate: 80/s
+  rate_per_second: 80/s
   error_rate: 0.015
   latency_ms:
     distribution: percentile

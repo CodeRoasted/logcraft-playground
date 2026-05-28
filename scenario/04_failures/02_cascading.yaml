@@ -5,7 +5,7 @@
 
 scenario:
   name: cascading-failure
-  duration: 10m
+  duration_seconds: 10m
 
   interactions:
     - {from: api-gateway, to: order-service, type: request}
@@ -16,7 +16,7 @@ scenario:
   incidents:
     - name: disk_io_storm
       trigger: "time > 3m"
-      duration: 2m
+      duration_seconds: 2m
       effects:
         - target: postgres
           latency_multiplier: 12.0
@@ -24,7 +24,7 @@ scenario:
 
     - name: cache_oom
       trigger: "time > 4m"
-      duration: 90s
+      duration_seconds: 90s
       effects:
         - target: redis-cache
           latency_multiplier: 20.0
@@ -32,12 +32,12 @@ scenario:
 
   # These rules propagate degradation upstream automatically
   rules:
-    - when: "postgres.error_rate > 0.05"
+    - condition: "postgres.error_rate > 0.05"
       propagate:
         to: order-service
         latency_multiplier: 3.0
         error_rate: 0.15
-    - when: "order-service.error_rate > 0.10"
+    - condition: "order-service.error_rate > 0.10"
       propagate:
         to: api-gateway
         error_rate: 0.08
@@ -45,7 +45,7 @@ scenario:
   agents:
     - name: api-gateway
       type: web_server
-      rate: 150/s
+      rate_per_second: 150/s
       error_rate: 0.01
       latency_ms: [10, 80]
       message_template: "{method} {path} -> {status_code}"
@@ -64,7 +64,7 @@ scenario:
 
     - name: order-service
       type: api_service
-      rate: 80/s
+      rate_per_second: 80/s
       error_rate: 0.005
       latency_ms:
         distribution: normal
@@ -82,7 +82,7 @@ scenario:
 
     - name: postgres
       type: database
-      rate: 100/s
+      rate_per_second: 100/s
       error_rate: 0.002
       latency_ms:
         distribution: percentile
@@ -111,7 +111,7 @@ scenario:
 
     - name: redis-cache
       type: cache
-      rate: 200/s
+      rate_per_second: 200/s
       error_rate: 0.001
       latency_ms: [0, 3]
       message_template: "{cmd} {key_prefix}* -> {result}"

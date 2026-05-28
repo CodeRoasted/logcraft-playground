@@ -5,13 +5,13 @@
 
 scenario:
   name: thundering-herd
-  duration: 8m
+  duration_seconds: 8m
 
   incidents:
     # Cache eviction at minute 2: every request falls through to the database
     - name: cache_eviction
       trigger: "time > 2m"
-      duration: 30s
+      duration_seconds: 30s
       effects:
         - target: redis-cache
           error_rate: 0.98      # nearly all cache lookups fail (cold cache)
@@ -20,7 +20,7 @@ scenario:
     # Database overwhelmed by the thundering herd immediately after
     - name: db_overload
       trigger: "time > 2m"
-      duration: 90s
+      duration_seconds: 90s
       effects:
         - target: mysql
           latency_multiplier: 15.0
@@ -29,7 +29,7 @@ scenario:
   agents:
     - name: web-api
       type: web_server
-      rate: 200/s
+      rate_per_second: 200/s
       error_rate: 0.005
       latency_ms: [5, 50]
       message_template: "{method} {path} cache={cache_status}"
@@ -48,7 +48,7 @@ scenario:
 
     - name: redis-cache
       type: cache
-      rate: 200/s
+      rate_per_second: 200/s
       error_rate: 0.002
       latency_ms: [0, 2]
       availability:
@@ -73,7 +73,7 @@ scenario:
 
     - name: mysql
       type: database
-      rate: 40/s    # normally only cache misses reach the database
+      rate_per_second: 40/s    # normally only cache misses reach the database
       error_rate: 0.003
       latency_ms:
         distribution: percentile
@@ -89,7 +89,7 @@ scenario:
       failures:
         mode: burst
         trigger: "error_rate > 0.1"
-        duration: 30s
+        duration_seconds: 30s
         error_rate: 0.5
       message_template: "{op} {table} {rows}r"
       fields:

@@ -2,7 +2,7 @@
 agent:
   name: elasticsearch
   type: search_engine
-  rate: 200/s
+  rate_per_second: 200/s
   error_rate: 0.008
   contention:
     max_connections: 300

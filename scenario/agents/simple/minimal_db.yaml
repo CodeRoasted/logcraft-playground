@@ -2,7 +2,7 @@
 agent:
   name: simple-db
   type: database
-  rate: 100/s
+  rate_per_second: 100/s
   error_rate: 0.005
   message_template: "{query_type} {table} ({row_count} rows)"
   fields:

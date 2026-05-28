@@ -5,12 +5,12 @@
 
 scenario:
   name: ecommerce-api
-  duration: 10m
+  duration_seconds: 10m
 
   agents:
     - name: api-gateway
       type: web_server
-      rate: 200/s
+      rate_per_second: 200/s
       error_rate: 0.01
       latency_ms:
         distribution: percentile
@@ -19,14 +19,14 @@ scenario:
         p99: 250
       phases:
         - name: warmup
-          duration: 1m
-          rate: 20/s
+          duration_seconds: 1m
+          rate_per_second: 20/s
         - name: steady
-          duration: 7m
-          rate: 200/s
+          duration_seconds: 7m
+          rate_per_second: 200/s
         - name: cooldown
-          duration: 2m
-          rate: 40/s
+          duration_seconds: 2m
+          rate_per_second: 40/s
       message_template: "{method} {path} -> {status_code}"
       fields:
         - name: method
@@ -44,7 +44,7 @@ scenario:
 
     - name: order-service
       type: api_service
-      rate: 80/s
+      rate_per_second: 80/s
       error_rate: 0.015
       latency_ms:
         distribution: percentile
@@ -68,7 +68,7 @@ scenario:
 
     - name: payment-processor
       type: external_api
-      rate: 30/s
+      rate_per_second: 30/s
       error_rate: 0.02
       # Payment gateways are slow with long tails — p99 of 3.5s is realistic
       latency_ms:

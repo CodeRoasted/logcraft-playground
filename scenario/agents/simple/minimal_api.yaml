@@ -2,7 +2,7 @@
 agent:
   name: simple-api
   type: api_service
-  rate: 50/s
+  rate_per_second: 50/s
   error_rate: 0.01
   message_template: "{action} {resource}: {result}"
   fields:

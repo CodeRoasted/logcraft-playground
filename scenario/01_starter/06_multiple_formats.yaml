@@ -4,7 +4,7 @@
 # Concepts: file sinks, multiple outputs, format per sink (json, ecs, kv)
 scenario:
   name: multiple-formats
-  duration: 2m
+  duration_seconds: 2m
 
   outputs:
     - name: log-aggregator
@@ -23,7 +23,7 @@ scenario:
   agents:
     - name: api-gateway
       type: web_server
-      rate: 5/s
+      rate_per_second: 5/s
       error_rate: 0.04
       message_template: "{method} {path} -> {status_code}"
       fields:

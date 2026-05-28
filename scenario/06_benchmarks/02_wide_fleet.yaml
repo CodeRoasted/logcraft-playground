@@ -5,11 +5,11 @@
 
 scenario:
   name: wide-fleet
-  duration: 60s
+  duration_seconds: 60s
 
   templates:
     fleet_node:
-      rate: 10/s       # 10/s each × 50 instances = 500/s for this agent type
+      rate_per_second: 10/s       # 10/s each × 50 instances = 500/s for this agent type
       error_rate: 0.01
       latency_ms:
         distribution: normal
@@ -18,7 +18,7 @@ scenario:
 
   agents:
     - name: web-node
-      use: fleet_node
+      use_template: fleet_node
       instances: 50    # spin up 50 identical web nodes
       message_template: "GET {path} -> {status_code}"
       fields:
@@ -31,9 +31,9 @@ scenario:
           weights: [99, 1]
 
     - name: worker-node
-      use: fleet_node
+      use_template: fleet_node
       instances: 50    # 50 background workers
-      rate: 5/s        # 5/s × 50 = 250/s aggregate
+      rate_per_second: 5/s        # 5/s × 50 = 250/s aggregate
       message_template: "job {job_type} -> {result}"
       fields:
         - name: job_type
@@ -46,9 +46,9 @@ scenario:
           weights: [95, 3, 2]
 
     - name: db-replica
-      use: fleet_node
+      use_template: fleet_node
       instances: 5     # 5 read replicas
-      rate: 100/s      # 100/s × 5 = 500/s aggregate
+      rate_per_second: 100/s      # 100/s × 5 = 500/s aggregate
       latency_ms:
         distribution: percentile
         p50: 5

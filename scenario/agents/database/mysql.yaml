@@ -2,7 +2,7 @@
 agent:
   name: mysql
   type: database
-  rate: 250/s
+  rate_per_second: 250/s
   error_rate: 0.004
   contention:
     max_connections: 150

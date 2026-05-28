@@ -5,13 +5,13 @@
 
 scenario:
   name: error-spike
-  duration: 12m
+  duration_seconds: 12m
 
   # Bad deploy fires at minute 5 and lasts 3 minutes
   incidents:
     - name: bad_deploy
       trigger: "time > 5m"
-      duration: 3m
+      duration_seconds: 3m
       effects:
         - target: api-server
           error_rate: 0.35
@@ -23,7 +23,7 @@ scenario:
   agents:
     - name: api-server
       type: web_server
-      rate: 100/s
+      rate_per_second: 100/s
       error_rate: 0.01
       latency_ms:
         distribution: percentile
@@ -33,16 +33,16 @@ scenario:
       # After the incident resolves, recovery is gradual (phases continue from where we are)
       phases:
         - name: steady
-          duration: 5m
-          rate: 100/s
+          duration_seconds: 5m
+          rate_per_second: 100/s
           error_rate: 0.01
         - name: degraded-recovery
-          duration: 3m
-          rate: 60/s
+          duration_seconds: 3m
+          rate_per_second: 60/s
           error_rate: 0.05
         - name: back-to-normal
-          duration: 1m
-          rate: 100/s
+          duration_seconds: 1m
+          rate_per_second: 100/s
           error_rate: 0.01
       message_template: "{method} {path} -> {status_code}"
       fields:
@@ -60,7 +60,7 @@ scenario:
 
     - name: postgres
       type: database
-      rate: 80/s
+      rate_per_second: 80/s
       error_rate: 0.003
       latency_ms:
         distribution: percentile

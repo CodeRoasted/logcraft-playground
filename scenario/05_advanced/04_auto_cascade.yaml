@@ -5,7 +5,7 @@
 
 scenario:
   name: auto-cascade
-  duration: 10m
+  duration_seconds: 10m
 
   interactions:
     - {from: frontend, to: api-gateway, type: request}
@@ -27,7 +27,7 @@ scenario:
   incidents:
     - name: postgres_failure
       trigger: "time > 3m"
-      duration: 2m
+      duration_seconds: 2m
       effects:
         - target: postgres
           latency_multiplier: 10.0
@@ -36,7 +36,7 @@ scenario:
   agents:
     - name: frontend
       type: web_server
-      rate: 300/s
+      rate_per_second: 300/s
       error_rate: 0.005
       latency_ms: [5, 30]
       message_template: "{method} {path} -> {status_code}"
@@ -55,7 +55,7 @@ scenario:
 
     - name: api-gateway
       type: api_service
-      rate: 290/s
+      rate_per_second: 290/s
       error_rate: 0.008
       latency_ms:
         distribution: normal
@@ -73,7 +73,7 @@ scenario:
 
     - name: user-service
       type: api_service
-      rate: 120/s
+      rate_per_second: 120/s
       error_rate: 0.005
       latency_ms:
         distribution: normal
@@ -93,7 +93,7 @@ scenario:
 
     - name: order-service
       type: api_service
-      rate: 170/s
+      rate_per_second: 170/s
       error_rate: 0.006
       latency_ms:
         distribution: percentile
@@ -112,7 +112,7 @@ scenario:
 
     - name: postgres
       type: database
-      rate: 350/s
+      rate_per_second: 350/s
       error_rate: 0.002
       latency_ms:
         distribution: percentile
@@ -136,7 +136,7 @@ scenario:
 
     - name: redis-cache
       type: cache
-      rate: 500/s
+      rate_per_second: 500/s
       error_rate: 0.001
       latency_ms: [0, 3]
       message_template: "{cmd} {key_type}"

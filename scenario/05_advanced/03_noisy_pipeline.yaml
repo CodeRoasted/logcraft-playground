@@ -5,7 +5,7 @@
 
 scenario:
   name: noisy-pipeline
-  duration: 5m
+  duration_seconds: 5m
 
   # Global noise applies to all agents unless they define their own
   noise:
@@ -16,7 +16,7 @@ scenario:
   agents:
     - name: ingestor
       type: data_pipeline
-      rate: 500/s
+      rate_per_second: 500/s
       error_rate: 0.002
       # Ingestor has slightly higher duplication than the global default
       noise:
@@ -42,7 +42,7 @@ scenario:
 
     - name: transformer
       type: data_pipeline
-      rate: 490/s    # slightly slower than ingestor — some records are dropped
+      rate_per_second: 490/s    # slightly slower than ingestor — some records are dropped
       error_rate: 0.01
       latency_ms:
         distribution: normal
@@ -68,7 +68,7 @@ scenario:
 
     - name: loader
       type: data_pipeline
-      rate: 480/s
+      rate_per_second: 480/s
       error_rate: 0.003
       latency_ms:
         distribution: percentile

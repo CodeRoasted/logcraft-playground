@@ -5,12 +5,12 @@
 
 scenario:
   name: structured-log-formats
-  duration: 2m
+  duration_seconds: 2m
 
   agents:
     - name: app-server
       type: application
-      rate: 10/s
+      rate_per_second: 10/s
       message_template: "Request to {endpoint} returned {status_code} in {latency_ms}ms"
       fields:
         - name: endpoint
