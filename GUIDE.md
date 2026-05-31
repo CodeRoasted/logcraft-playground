@@ -1,16 +1,23 @@
-# LogCraft — Concepts Guide
+# LogCraft — Scenario Concepts Guide
 
-New to LogCraft? This is the place to start. The [scenario reference](scenario_reference.md)
-is a complete API listing — come back to it once you understand the pieces. This guide
-explains what everything *means*.
+This is the public **scenario catalog & concepts guide**. It explains what a LogCraft
+scenario *means* — the building blocks you'll see in the `scenario/` YAML files and in the
+[scenario reference](scenario_reference.md) (the complete, key-by-key API listing). Read
+this for the *why*; read the reference for the *what exactly*.
+
+The scenarios here are openly published (CC-BY-4.0) so you can see precisely how a
+**deterministic** log simulation is authored. The LogCraft **engine** is part of
+[CodeRoast](https://coderoast.fr) — you run these scenarios in the hosted **Lab**, where the
+same scenario produces the same logs every time. This guide is about reading and
+understanding them.
 
 ---
 
-## What is LogCraft?
+## What is a LogCraft scenario?
 
-LogCraft generates synthetic log streams. You write a small YAML file that describes your
-system — which services you have, how busy they are, what their logs look like — and
-LogCraft produces a continuous stream of realistic log records.
+A scenario is a small YAML description of a system — which services you have, how busy they
+are, what their logs look like. From it, LogCraft produces a continuous stream of realistic
+log records, **deterministically**: the same scenario yields the same logs on every run.
 
 The logs look like real application output:
 
@@ -33,21 +40,16 @@ Jan 15 10:23:47 payments-prod payment-service[4821]: transaction_id=txn-98342 re
 
 ## Your first scenario
 
-The starter scenarios in `scenario/01_starter/` are designed to be read in order.
-Start with the simplest:
-
-```bash
-logcraft scenario/01_starter/01_hello_world.yaml
-```
-
-Open the file alongside this guide. Each starter introduces one new concept. Read the
-YAML, run it, watch the output, then move to the next one.
+The starter scenarios in `scenario/01_starter/` are designed to be read in order — each
+introduces one new concept. Open `01_hello_world.yaml` alongside this guide: read the YAML,
+run it in the [CodeRoast Lab](https://coderoast.fr) to watch the output, then move to the
+next one.
 
 ---
 
-## What is a scenario?
+## Anatomy of a scenario
 
-A scenario is a YAML file that fully describes one simulation run. It specifies:
+Every scenario is a single YAML file describing one simulation run. It specifies:
 
 - **How long** to run (or run forever until you stop it)
 - **Which services** to simulate — called *agents*
@@ -56,18 +58,20 @@ A scenario is a YAML file that fully describes one simulation run. It specifies:
 ```yaml
 scenario:
   name: my-api
-  duration: 2m              # Stop after 2 minutes (0 = run forever)
+  duration_seconds: 2m       # Stop after 2 minutes (0 = run forever)
 
   agents:
     - name: web-server
-      rate: 100/s           # 100 log records per second
+      rate_per_second: 100/s # 100 log records per second
 
   outputs:
     - type: console
-      format: json          # Print JSON to stdout
+      format: json           # Print JSON to stdout
 ```
 
-Every scenario starts with `scenario:`. Everything else is nested under it.
+Every scenario starts with `scenario:`. Everything else is nested under it. Every key here
+is the authoritative one — LogCraft uses one name per concept, with no aliases, so the keys
+you read in a scenario are exactly the keys in the [reference](scenario_reference.md).
 
 ---
 
@@ -79,10 +83,10 @@ worker. Each agent runs independently and generates log records at its own rate.
 ```yaml
 agents:
   - name: api-gateway
-    type: web_server        # Free-form label; purely descriptive
-    rate: 200/s             # Records per second
-    error_rate: 0.03        # 3% of records are ERROR level
-    log_level: info         # Default severity when not an error
+    type: web_server         # Free-form label; purely descriptive
+    rate_per_second: 200/s   # Records per second
+    error_rate: 0.03         # 3% of records are ERROR level
+    log_level: info          # Default severity when not an error
 ```
 
 You can have as many agents as you need. They all run simultaneously, each producing
@@ -90,11 +94,12 @@ their own log stream.
 
 ### Rate
 
-Rate controls how many log records an agent produces each second.
+`rate_per_second` controls how many log records an agent produces each second. It accepts
+a `"N/s"` string or a plain number — both mean the same thing:
 
 ```yaml
-rate: 100/s          # String form: "N/s"
-rate_per_second: 100 # Numeric form; same effect
+rate_per_second: 100/s   # string form ("N/s")
+rate_per_second: 100     # plain number; same effect
 ```
 
 Some rough reference points:
@@ -102,6 +107,9 @@ Some rough reference points:
 - A Postgres database with query logging: 10–50/s
 - A background job scheduler: 1–5/s
 - A high-traffic API during peak hours: 1000–5000/s
+
+A rate of `0` silences an agent — it emits nothing. That's how a service that exists only
+so a **causal flow** can log *through* it stays quiet (see Causal flows, below).
 
 ### Error rate
 
@@ -118,7 +126,7 @@ produces and how their values are generated.
 ```yaml
 agents:
   - name: nginx
-    rate: 100/s
+    rate_per_second: 100/s
     message_template: "{method} {path} -> {status_code}"
     fields:
       - name: method
@@ -249,11 +257,11 @@ outputs:
   - type: http             # POST to an HTTP endpoint
     url: "http://localhost:9200/_bulk"
     format: ecs
-    batch_size: 100
-    flush_interval_ms: 1000
+    http_batch_size: 100
+    http_flush_interval_ms: 1000
 ```
 
-Output types available in the free CLI:
+LogCraft writes to several output types; the common ones:
 
 | Type | Description |
 |------|-------------|
@@ -261,12 +269,13 @@ Output types available in the free CLI:
 | `file` | Write to disk with optional rotation |
 | `http` | Batch HTTP POST (Elasticsearch, Loki, any webhook) |
 
+The [reference](scenario_reference.md#output-types) lists the full set, including
+recording and metrics sinks.
+
 ### Log formats
 
-LogCraft supports 20+ log formats. You don't need to transform output to feed your
-tools — generate it in the right format from the start.
-
-Free CLI formats include:
+LogCraft emits 20+ log formats — generate output in the shape your tools expect, with
+no post-processing step. Common formats:
 
 | Format | Looks like |
 |--------|-----------|
@@ -280,10 +289,9 @@ Free CLI formats include:
 | `rfc5424` | `<14>1 2026-01-15T10:23:45Z host app 123 - - message` |
 | `kv` / `logfmt` | `ts=2026-01-15T10:23:45Z level=info service=api msg="..."` |
 
-Additional formats (`ecs`, `otel`, `cloudwatch`, `systemd_journal`, and more) are
-available on [CodeRoast](https://coderoast.fr).
-
-The full format list with examples is in [scenario_reference.md](scenario_reference.md#output-formats).
+Additional formats — `ecs`, `otel`, `cloudwatch`, `systemd_journal`, and more — are in
+the reference. The full list with examples is in
+[scenario_reference.md](scenario_reference.md#output-formats).
 
 ---
 
@@ -295,29 +303,29 @@ rate, or latency for a set duration, then the next phase starts.
 ```yaml
 agents:
   - name: api-server
-    rate: 100/s                     # Base rate (used outside any phase)
+    rate_per_second: 100/s              # Base rate (used outside any phase)
     phases:
       - name: warmup
-        duration: 30s
-        rate: 10/s                  # Start slow
+        duration_seconds: 30s
+        rate_per_second: 10/s           # Start slow
 
       - name: steady-state
-        duration: 5m
-        rate: 100/s                 # Normal load
+        duration_seconds: 5m
+        rate_per_second: 100/s          # Normal load
         latency_ms:
           distribution: normal
           mean: 30
           stddev: 8
 
       - name: traffic-spike
-        duration: 1m
-        rate: 500/s                 # 5× surge
-        error_rate: 0.08            # Errors increase under load
+        duration_seconds: 1m
+        rate_per_second: 500/s          # 5× surge
+        error_rate: 0.08                # Errors increase under load
         latency_ms: [100, 800]
 
       - name: recovery
-        duration: 2m
-        rate: 100/s
+        duration_seconds: 2m
+        rate_per_second: 100/s
         error_rate: 0.01
 ```
 
@@ -338,10 +346,10 @@ and modify agent behavior for a duration, then auto-resolve.
 ```yaml
 incidents:
   - name: database_overload
-    trigger: "time > 5m"          # Fires at the 5-minute mark
-    duration: 2m                   # Auto-resolves after 2 minutes
+    trigger: "time > 5m"           # Fires at the 5-minute mark
+    duration_seconds: 2m           # Auto-resolves after 2 minutes
     effects:
-      - target: postgres            # Which agent is affected
+      - target: postgres           # Which agent is affected
         latency_multiplier: 8.0    # Database becomes 8× slower
         error_rate: 0.25           # 25% of queries fail
       - target: api-server         # Upstream effect (can affect multiple agents)
@@ -356,7 +364,7 @@ fixed time:
 incidents:
   - name: cache_timeout
     trigger_probability: 0.002     # 0.2% chance per second of firing
-    duration: 30s
+    duration_seconds: 30s
     effects:
       - target: redis
         latency_multiplier: 20.0
@@ -373,23 +381,48 @@ resulting logs are genuinely difficult to distinguish from production.
 
 The features above cover the starter scenarios. The reference documents many more:
 
-### Multiple agents with interactions
+### Causal flows — distributed traces in causal order
 
-Declare which agents call which others. This enables cascading: when one service
-degrades, its callers can automatically degrade too.
+Rate-driven agents are independent and **unordered**. A **causal flow** models a
+distributed trace or workflow: it spawns trace *instances* that walk a state graph from
+`start`, emitting one record per visited state **through the service bound to that state**,
+all carrying a shared correlation id, until a state with no outgoing transition ends the
+instance. It is the one construct that imposes a declared *order* on the stream — which is
+what gives a consumer a clean causal / transition graph (a dominant path).
 
 ```yaml
-interactions:
-  - from: api-gateway
-    to: order-service
-    type: request
-  - from: order-service
-    to: postgres
-    type: dependency
+flows:
+  - name: checkout
+    instance_rate_per_second: 50/s   # new trace instances per second
+    max_concurrent: 200              # cap in-flight instances
+    correlation_field: trace_id      # stamped on every step of an instance
+    start: receive
+    states:                          # state name -> one logged step, through `agent`
+      receive: { agent: nginx,    message_template: "GET /checkout" }
+      auth:    { agent: auth,     message_template: "verify {user}" }
+      charge:  { agent: payments, message_template: "charge {amount}" }
+      done:    { agent: nginx,    message_template: "200 checkout" }
+    transitions:                     # weighted directed edges
+      - { from: receive, to: auth,   network_latency_ms: 2 }
+      - { from: auth,    to: charge, weight: 0.98 }   # the dominant path
+      - { from: auth,    to: done,   weight: 0.02 }   # a rare off-path branch
+      - { from: charge,  to: done,   network_latency_ms: 5 }
 ```
 
-→ [Interactions](scenario_reference.md#interactions),
-[Rules](scenario_reference.md#rules),
+Flows require deterministic mode (a scenario `seed:`); branch selection and step content
+are seeded per instance, so the same scenario replays bit-identically. The services a flow
+logs through are ordinary agents — set them to `rate_per_second: 0` if they should only
+speak through the flow.
+
+→ [Causal Flows](scenario_reference.md#causal-flows)
+
+### Cascading failures
+
+To make a failing service degrade the ones that depend on it, declare each agent's
+`dependencies:` and enable `auto_cascade:` (error/latency propagate down the dependency
+graph, dampened per hop), or write explicit `rules:` that fire when a condition is met.
+
+→ [Rules](scenario_reference.md#rules),
 [Auto-Cascade](scenario_reference.md#auto-cascade)
 
 ### Health state machine
@@ -423,22 +456,22 @@ behavior when they cross thresholds.
 
 ### Templates — reusable agent presets
 
-Define a named agent profile once and inherit it with `use: template_name`. Override
-only what differs per instance.
+Define a named agent profile once and inherit it with `use_template: template_name`.
+Override only what differs per instance.
 
 ```yaml
 templates:
   go_service:
-    rate: 200/s
+    rate_per_second: 200/s
     error_rate: 0.005
     latency_ms: {distribution: normal, mean: 15, stddev: 4}
 
 agents:
   - name: user-service
-    use: go_service          # inherits everything above
-    error_rate: 0.02         # override just this one value
+    use_template: go_service     # inherits everything above
+    error_rate: 0.02             # override just this one value
   - name: order-service
-    use: go_service          # same baseline
+    use_template: go_service     # same baseline
 ```
 
 Templates keep large multi-agent scenarios DRY. Define your standard microservice
@@ -459,7 +492,7 @@ includes:
 
 agents:
   - name: api
-    use: go_service    # defined in templates.yaml
+    use_template: go_service    # defined in templates.yaml
 ```
 
 → [Includes](scenario_reference.md#includes)
@@ -498,10 +531,9 @@ Simulate pipeline imperfections: duplicated records, missing fields, timing jitt
 
 ## Replay
 
-LogCraft can record a run to disk and play it back later — a way to feed the same
-log stream into a tool multiple times without re-running the simulation.
-
-To capture a run, add a `recording` output:
+A run can be recorded to disk and played back later — a way to feed the same log stream
+into a tool multiple times without re-running the simulation. Add a `recording` output to
+capture a run:
 
 ```yaml
 outputs:
@@ -511,40 +543,31 @@ outputs:
     path: captures/my_run.logcraft
 ```
 
-To replay it:
+A recording plays back the captured records in their original order and timing,
+byte-identical to the original run. Use it when you want to re-ingest a fixed, previously
+captured stream: feeding the same access-log burst through a new parser version, or running
+a recorded incident through a different backend. A scenario plays one back with a `replay:`
+block pointing at the file.
 
-```bash
-logcraft replay captures/my_run.logcraft
-```
-
-Replay emits the captured records in the original order and timing, byte-identical
-to the original run. Use it when you want to re-ingest a fixed, previously captured
-stream: feeding the same access log burst through a new parser version, or running a
-recorded incident through a different backend.
+→ [Replay](scenario_reference.md#replay)
 
 ---
 
 ## Deterministic mode
 
-By default, every run produces different logs — randomization seeds from the system
-clock, so each run is unique.
-
-Add `seed:` to freeze the random seed:
+Add `seed:` to a scenario and it produces **bit-for-bit identical output on every run** —
+same log records, same field values, same timestamps, same sequence, same count. Run it
+today or in six months, on one machine or another, and you get the exact same stream. Not
+"statistically similar". Byte-identical. Every weighted choice, every range sample, every
+distribution draw, every incident trigger, every phase transition — all locked.
 
 ```yaml
 scenario:
   seed: 42
 ```
 
-With `seed:` set, LogCraft produces **bit-for-bit identical output on every run** —
-same log records, same field values, same timestamps, same sequence, same count. Run
-it today or in six months, on your laptop or in CI, and you get the exact same stream.
-Not "statistically similar". Byte-identical. Every weighted choice, every range
-sample, every distribution draw, every incident trigger, every phase transition —
-all locked.
-
-**This requires [CodeRoast](https://coderoast.fr).** The free CLI always produces
-unique randomized runs.
+Without a seed, each run randomizes — the right default for open-ended exploration. The
+scenarios published here are seeded, so they reproduce exactly.
 
 ### Why does this matter?
 
@@ -558,14 +581,14 @@ exactly one thing: your code changed something.
 test suite. Every CI run gets identical input — tests never fail because "the random
 data was different today".
 
-**Reproducible bug reports.** "Run `logcraft scenario.yaml` with `seed: 42` and
-you'll see exactly what I saw." Without `seed:`, the other person gets a different
-run and can't reproduce the problem.
+**Reproducible bug reports.** "Open this scenario with `seed: 42` and you'll see exactly
+what I saw." Without a seed, the other person gets a different run and can't reproduce the
+problem.
 
 **Multi-machine consistency.** Two engineers, two machines, two timezones. With
 `seed:`, they get the same logs. Without it, they don't.
 
-**Timeline scrubbing.** In CodeRoast Lab, deterministic scenarios have a seek bar.
+**Timeline scrubbing.** In the CodeRoast Lab, deterministic scenarios have a seek bar.
 Jump to minute 8, scrub back to minute 2, skip to minute 47 — instantly. The engine
 re-runs from seed to the target time in the background; because the output is
 bit-for-bit identical every time, the state at any timestamp is always reproducible
@@ -582,7 +605,7 @@ same question differently: the scenario itself becomes the reproducible artifact
 - **Iterability.** Change a field, re-run, get a different-but-still-reproducible
   stream. Replay locks you to one recording; every scenario edit requires a new
   recording that is incomparable to the last.
-- **Sharing.** "Run this YAML with seed 42" works for any colleague on any machine.
+- **Sharing.** "Open this YAML with seed 42" works for any colleague on any machine.
   Distributing a recording means shipping a large binary file.
 - **Timestamps.** Replayed records carry timestamps from when the recording was made.
   `seed:` generates timestamps relative to the run start — correct for any test that
@@ -591,9 +614,8 @@ same question differently: the scenario itself becomes the reproducible artifact
   variable values, and incident timing are not stored and cannot be replayed; `seed:`
   reproduces all of it exactly.
 
-The free CLI is the right tool for exploration, development, and one-shot generation.
 When you need the scenario to be a stable artifact — something you can pin, version,
-share, and rely on in CI — that's `seed:`, and that's CodeRoast.
+share, and rely on in CI — that's `seed:`.
 
 ---
 
