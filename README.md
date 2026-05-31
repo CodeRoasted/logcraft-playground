@@ -9,14 +9,10 @@ send anywhere.
 > agents, fields, latency distributions (including what p50/p99 means), phases,
 > and incidents with worked examples.
 
-This repository contains starter scenarios, a reusable agent library, and the source
-of the CLI consumer. The CLI links against `logcraft_core` (closed source); the
-scenario YAML, agent library, and CLI source in this repo are Apache 2.0.
-
-**The free CLI includes everything.** The only feature gated to
-[CodeRoast](https://coderoast.fr) is `seed:` (deterministic mode — same logs every
-run). Without it, each run is uniquely randomized, which is the right default for
-learning and testing.
+This repository is a **content-only package**: starter scenarios, a reusable agent
+library, and the DSL documentation. It contains no source code — the `logcraft_core`
+engine that runs these scenarios is distributed separately. All content here is
+licensed [CC-BY-4.0](LICENSE).
 
 ## Key Paths
 
@@ -25,15 +21,9 @@ learning and testing.
 | `GUIDE.md` | Getting started — concepts, examples, and onboarding for new users. |
 | `scenario/01_starter/` | Starter scenarios, ordered by increasing complexity. |
 | `scenario/agents/` | Reusable agent definitions (nginx, postgres, redis, kafka, …). |
-| `cli/` | Source for the LogCraft CLI consumer; links with `logcraft_core`. |
 | `scenario_reference.md` | Complete DSL reference — every key, type, and default. |
 
-## Build
+## License
 
-Inside the full CodeRoast workspace, use `malf` from this package root:
-
-```bash
-malf build .
-```
-
-The build requires `logcraft_core/1.3.8`. Scenario YAML remains editable and inspectable without that dependency.
+All content in this repository — scenario and agent YAML, the DSL reference, and the
+guide — is licensed under [CC-BY-4.0](LICENSE).
