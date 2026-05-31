@@ -668,6 +668,17 @@ Flows require **deterministic mode** (a scenario `seed`) and are ignored in real
 selection and step content are seeded per-instance, so the same scenario+seed replays
 bit-identically — adding a flow never shifts an agent's own content.
 
+> **Behavioral isolation — the `agent` binding is name + routing only.** A flow step
+> does **not** inherit the bound agent's dynamics: the agent's `error_rate`,
+> `latency_ms`, `phases`, `incidents`, `rules`, `effects`, `health_state`,
+> `level_overrides`, and `fields` have **no effect** on flow-step records. A step's
+> level/error comes only from the flow's per-step `level` / `error_rate`; its fields
+> only from the step's own `fields:`; its inter-step delay only from the transition's
+> `network_latency_ms` / `network_jitter_ms`. An incident that degrades the `payments`
+> agent does **not** degrade a `charge` step routed through it. Flow topology, weights,
+> and per-step rates are likewise **static for the entire run** — no phase, incident,
+> or rate-modulation changes them.
+
 ```yaml
 flows:
   - name: checkout
@@ -705,7 +716,7 @@ flows:
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `agent` | string | required | Service the step logs through (must be a declared agent) |
+| `agent` | string | required | Service the step logs through — **name/routing only; the agent's own `error_rate` / `latency` / `effects` / `fields` do not apply** (must be a declared agent) |
 | `message_template` | string | `""` | Message with `{field}` placeholders |
 | `level` | string | the agent's `log_level` | Per-step log level |
 | `error_rate` | number | `0` | Per-step probability the record is escalated to `error` level |
