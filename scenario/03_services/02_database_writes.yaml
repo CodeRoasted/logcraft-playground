@@ -5,12 +5,12 @@
 
 scenario:
   name: webapp-postgres
-  duration: 5m
+  duration_seconds: 5m
 
   agents:
     - name: web-app
       type: web_server
-      rate: 50/s
+      rate_per_second: 50/s
       error_rate: 0.02
       latency_ms:
         distribution: normal
@@ -44,7 +44,7 @@ scenario:
 
     - name: postgres
       type: database
-      rate: 120/s    # database sees more ops than HTTP: joins, indexes, sequences
+      rate_per_second: 120/s    # database sees more ops than HTTP: joins, indexes, sequences
       error_rate: 0.005
       latency_ms:
         distribution: percentile

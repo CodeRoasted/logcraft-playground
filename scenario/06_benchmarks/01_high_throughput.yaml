@@ -1,11 +1,11 @@
 # Benchmarks 01 — High Throughput
 # Single agent at 10,000 records/s for 60 seconds.
 # Run this to characterize your pipeline's maximum sustainable ingestion rate.
-# Concepts: high rate, pipeline tuning (ring_capacity, batch sizes, backpressure: drop)
+# Concepts: high rate, pipeline tuning (ring_capacity, batch sizes, policy: drop)
 
 scenario:
   name: high-throughput
-  duration: 60s
+  duration_seconds: 60s
 
   # Pipeline tuning for maximum throughput
   pipeline:
@@ -13,12 +13,12 @@ scenario:
     ring_capacity: 65536
     min_batch: 64
     max_batch: 1024
-    backpressure: drop   # drop records if the pipeline is full, never block the simulation
+    policy: drop   # drop records if the pipeline is full, never block the simulation
 
   agents:
     - name: fast-api
       type: web_server
-      rate: 10000/s
+      rate_per_second: 10000/s
       error_rate: 0.01
       message_template: "{method} {path} {status_code} {latency_ms}ms"
       fields:

@@ -3,7 +3,7 @@
 # Concepts: incidents, effects, interactions, rules, templates
 scenario:
   name: incident-response
-  duration: 5m
+  duration_seconds: 5m
 
   outputs:
     - name: console
@@ -12,7 +12,7 @@ scenario:
 
   templates:
     api_service:
-      rate: 5/s
+      rate_per_second: 5/s
       error_rate: 0.01
       latency_ms:
         distribution: normal
@@ -24,7 +24,7 @@ scenario:
   incidents:
     - name: database_overload
       trigger: "time > 2m"
-      duration: 90s
+      duration_seconds: 90s
       effects:
         - target: postgres
           latency_multiplier: 8
@@ -35,29 +35,19 @@ scenario:
 
     - name: cache_failure
       trigger: "time > 3m"
-      duration: 60s
+      duration_seconds: 60s
       effects:
         - target: redis-cache
           latency_multiplier: 15
           error_rate: 0.25
 
-  interactions:
-    - from: api-gateway
-      to: order-service
-      type: request
-    - from: order-service
-      to: postgres
-      type: dependency
-    - from: order-service
-      to: redis-cache
-      type: dependency
 
   rules:
-    - when: "postgres.error_rate > 0.05"
+    - condition: "postgres.error_rate > 0.05"
       propagate:
         to: order-service
         latency_multiplier: 2.0
-    - when: "order-service.error_rate > 0.1"
+    - condition: "order-service.error_rate > 0.1"
       propagate:
         to: api-gateway
         error_rate: 0.08
@@ -65,7 +55,7 @@ scenario:
   agents:
     - name: api-gateway
       type: web_server
-      use: api_service
+      use_template: api_service
       message_template: "{method} {path} -> {status_code}"
       fields:
         - name: method
@@ -82,8 +72,8 @@ scenario:
 
     - name: order-service
       type: api_service
-      use: api_service
-      rate: 3/s
+      use_template: api_service
+      rate_per_second: 3/s
       message_template: "Order {order_id}: {action}"
       fields:
         - name: order_id
@@ -97,7 +87,7 @@ scenario:
 
     - name: postgres
       type: database
-      rate: 8/s
+      rate_per_second: 8/s
       error_rate: 0.005
       latency_ms:
         distribution: percentile
@@ -121,7 +111,7 @@ scenario:
 
     - name: redis-cache
       type: cache
-      rate: 10/s
+      rate_per_second: 10/s
       error_rate: 0.001
       latency_ms: [0, 2]
       message_template: "{operation} {key_prefix}*"

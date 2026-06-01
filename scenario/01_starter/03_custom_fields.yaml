@@ -3,7 +3,7 @@
 # Concepts: weighted_choice, choice, range, sequence, static, normal
 scenario:
   name: custom-fields
-  duration: 2m
+  duration_seconds: 2m
 
   outputs:
     - name: console
@@ -13,7 +13,7 @@ scenario:
   agents:
     - name: api-gateway
       type: web_server
-      rate: 3/s
+      rate_per_second: 3/s
       error_rate: 0.02
       message_template: "{method} {path} -> {status_code} ({response_time_ms}ms)"
       fields:

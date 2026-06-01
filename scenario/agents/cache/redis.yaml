@@ -2,7 +2,7 @@
 agent:
   name: redis-cache
   type: cache
-  rate: 1000/s
+  rate_per_second: 1000/s
   error_rate: 0.001
   latency_ms:
     distribution: percentile

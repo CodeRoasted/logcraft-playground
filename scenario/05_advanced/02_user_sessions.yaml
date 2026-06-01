@@ -5,7 +5,7 @@
 
 scenario:
   name: user-sessions
-  duration: 10m
+  duration_seconds: 10m
 
   users:
     count: 500
@@ -45,7 +45,7 @@ scenario:
   agents:
     - name: web-app
       type: web_server
-      rate: 200/s
+      rate_per_second: 200/s
       error_rate: 0.01
       latency_ms:
         distribution: normal

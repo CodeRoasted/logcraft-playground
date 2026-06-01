@@ -2,7 +2,7 @@
 agent:
   name: k8s-controller
   type: orchestrator
-  rate: 30/s
+  rate_per_second: 30/s
   error_rate: 0.01
   message_template: "{event_type} {resource_kind}/{resource_name} in {namespace}: {reason}"
   fields:

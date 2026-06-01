@@ -4,7 +4,7 @@
 
 scenario:
   name: event-driven-kafka
-  duration: 5m
+  duration_seconds: 5m
 
   entity_pool:
     - user:12345
@@ -16,7 +16,7 @@ scenario:
   agents:
     - name: event-producer
       type: api_service
-      rate: 80/s
+      rate_per_second: 80/s
       message_template: "produce event_type={event_type} topic={topic} bytes={payload_bytes}"
       fields:
         - name: event_type
@@ -40,7 +40,7 @@ scenario:
 
     - name: kafka-broker
       type: message_broker
-      rate: 200/s    # broker sees all produces + replication + fetches
+      rate_per_second: 200/s    # broker sees all produces + replication + fetches
       error_rate: 0.001
       latency_ms:
         distribution: normal
@@ -71,7 +71,7 @@ scenario:
 
     - name: event-consumer
       type: worker
-      rate: 75/s    # slightly behind the producer: consumer lag builds up
+      rate_per_second: 75/s    # slightly behind the producer: consumer lag builds up
       error_rate: 0.005
       latency_ms:
         distribution: percentile

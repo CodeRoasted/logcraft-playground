@@ -4,7 +4,7 @@
 # Concepts: multiple outputs, format per sink, independent write telemetry
 scenario:
   name: multiple-outputs
-  duration: 2m
+  duration_seconds: 2m
 
   outputs:
     - name: log-aggregator
@@ -19,7 +19,7 @@ scenario:
   agents:
     - name: nginx
       type: web_server
-      rate: 3/s
+      rate_per_second: 3/s
       error_rate: 0.03
       message_template: "{method} {path} -> {status_code}"
       fields:

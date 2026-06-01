@@ -5,27 +5,12 @@ file. Generated from direct source-code audit of `scenario_loader.cpp`, `config.
 `capability_keys.hpp`, and `field_generator.cpp`. This is the single source of truth;
 `logcraft/technical_docs/reference/scenario_reference.md` redirects here.
 
-All scenarios are defined in YAML under a top-level `scenario:` key.
-
-```bash
-logcraft my_scenario.yaml
-```
-
----
-
-## CLI vs CodeRoast
-
-The free CLI binary includes every feature documented here with one exception: **`seed:`
-(deterministic mode) requires [CodeRoast](https://coderoast.fr)**. Without `seed:`, each
-run produces unique randomized logs — which is the right default for exploration and
-testing.
-
-The `insight_shm` output sink connects to InSight's shared-memory IPC channel; it is
-only useful when running inside the CodeRoast platform.
-
-All other features — every field generator, every output format, all the chaos tooling
-(phases, incidents, health state machine, rate modulation, state variables, noise) —
-are available to the free CLI.
+All scenarios are defined in YAML under a top-level `scenario:` key. These scenarios are
+openly published (CC-BY-4.0); the LogCraft **engine** that runs them is part of
+[CodeRoast](https://coderoast.fr), where you run a scenario in the hosted **Lab**. A run
+without `seed:` randomizes every time (the right default for open-ended exploration);
+adding `seed:` selects **deterministic mode** — bit-identical logs on every run (see
+[Engine Modes](#engine-modes)).
 
 ---
 
@@ -53,7 +38,7 @@ are available to the free CLI.
 - [Phases](#phases)
 - [Latency](#latency)
 - [Templates](#templates)
-- [Interactions](#interactions)
+- [Causal Flows](#causal-flows)
 - [Rules](#rules)
 - [Incidents](#incidents)
 - [Health State Machine](#health-state-machine)
@@ -66,7 +51,6 @@ are available to the free CLI.
 - [Field Variations](#field-variations)
 - [Log Format](#log-format)
 - [System Archetypes](#system-archetypes)
-  - [Request Flow](#request-flow)
   - [Contention](#contention)
   - [Slow Queries](#slow-queries)
   - [Availability](#availability)
@@ -89,18 +73,17 @@ warning but do not fail parsing.
 ```yaml
 scenario:
   name: "my-scenario"
-  duration: 5m
+  duration_seconds: 5m
   agents:
     - name: api-server
-      rate: 100/s
+      rate_per_second: 100/s
 ```
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `name` | string | `"unnamed"` | Human-readable scenario name |
-| `duration` | string/number | `0` | Auto-stop duration (`0` = run forever). See [Duration Format](#duration-format) |
-| `duration_seconds` | number | `0.0` | Legacy alias for `duration` in raw seconds; `duration` takes precedence |
-| `seed` | uint64 | absent | Sets deterministic mode — **requires CodeRoast**. See [Engine Modes](#engine-modes) |
+| `duration_seconds` | string/number | `0` | Auto-stop duration (`0` = run forever). Accepts a duration string (`"5m"`) or plain seconds. See [Duration Format](#duration-format) |
+| `seed` | uint64 | absent | Sets deterministic mode — bit-identical replay. See [Engine Modes](#engine-modes) |
 | `agents` | sequence | required | One or more agent definitions |
 | `outputs` | sequence | `[{type: console, format: json}]` | Output sink definitions |
 | `environment` | map | absent | Global metadata (region, cluster, version) |
@@ -111,7 +94,7 @@ scenario:
 | `field_variations` | sequence | absent | Numeric field jitter config |
 | `log_format` | map | absent | Output field selection |
 | `templates` | map | absent | Named reusable agent presets |
-| `interactions` | sequence | absent | Cross-agent dependency declarations |
+| `flows` | sequence | absent | Causal flows — deterministic instanced traces (see [Causal Flows](#causal-flows)) |
 | `rules` | sequence | absent | Propagation rules |
 | `incidents` | sequence | absent | Time- or probability-triggered events |
 | `auto_cascade` | map | absent | Automatic error cascading |
@@ -145,11 +128,16 @@ Fractional values are supported: `"0.5s"`, `"1.5m"`.
 Rates accept `"N/s"` or a plain number (records per second).
 
 ```yaml
-rate: 200/s          # string form
-rate_per_second: 200 # numeric fallback
+rate_per_second: 200/s   # string form ("N/s")
+rate_per_second: 200     # plain number (records per second)
 ```
 
-When both are present, `rate` takes precedence.
+`rate_per_second: 0` **silences the agent** — it emits no records (the `<= 0`
+emission guard), while the agent stays alive and can be raised again later. Use it
+to model a **flow-only service** (the agent exists only so a flow can log *through*
+it — no `start_delay` hack needed) or, in a `phases:` entry, to make an agent go
+quiet at a sim-time boundary (vanish-a-template-at-T). A phase that **sets**
+`rate_per_second: 0` silences; a phase that **omits** the key keeps the current rate.
 
 ---
 
@@ -158,10 +146,10 @@ When both are present, `rate` takes precedence.
 | Mode | Selected by | Clock | Notes |
 |------|-------------|-------|-------|
 | **Real** | no `seed:` | `real` | Default. Randomized each run. |
-| **Deterministic** | `seed:` present | `virtual` (required) | Same logs every run. Requires CodeRoast. Requires `pipeline.backpressure: block`. Rejects `time.timezone: local`. |
+| **Deterministic** | `seed:` present | `virtual` (required) | Same logs every run. Requires `pipeline.policy: block`. Rejects `time.timezone: local`. |
 
 In deterministic mode, the loader auto-creates a `clock: {mode: virtual}` and sets
-`pipeline.backpressure: block` when those blocks are absent, and emits a notice.
+`pipeline.policy: block` when those blocks are absent, and emits a notice.
 
 ---
 
@@ -175,8 +163,8 @@ outputs:
     type: http
     url: "http://localhost:9200/_bulk"
     format: ecs
-    batch_size: 100
-    flush_interval_ms: 1000
+    http_batch_size: 100
+    http_flush_interval_ms: 1000
 
   - type: console
     format: json
@@ -190,9 +178,9 @@ outputs:
 | `file` | Write to disk with optional rotation |
 | `recording` | Write JSONL for later replay |
 | `http` | Batched HTTP POST (e.g. Elasticsearch, Loki, any webhook) |
-| `prometheus` | Expose `/metrics` scrape endpoint (CodeRoast) |
-| `statsd` | Push metrics over UDP (CodeRoast) |
-| `insight_shm` | Shared-memory IPC channel for InSight integration (CodeRoast platform only) |
+| `prometheus` | Expose `/metrics` scrape endpoint |
+| `statsd` | Push metrics over UDP |
+| `insight_shm` | Shared-memory IPC channel for InSight integration |
 
 ### Output Formats
 
@@ -238,20 +226,19 @@ All options are parsed per-sink and ignored when not applicable to the sink type
 | `max_size_bytes` | integer | `0` | `file` | Rotate when file exceeds this size (0 = no rotation) |
 | `max_files` | integer | `5` | `file` | Number of rotated files to keep |
 | `url` | string | `""` | `http` | Destination endpoint URL |
-| `batch_size` | integer | `100` | `http` | Records per POST request |
-| `flush_interval_ms` | integer | `1000` | `http` | Max ms before flushing a partial batch |
-| `content_type` | string | `"application/json"` | `http` | Content-Type header |
+| `http_batch_size` | integer | `100` | `http` | Records per POST request |
+| `http_flush_interval_ms` | integer | `1000` | `http` | Max ms before flushing a partial batch |
+| `http_content_type` | string | `"application/json"` | `http` | Content-Type header |
 | `headers` | map | `{}` | `http` | Extra HTTP request headers (string key-value pairs) |
 | `host` | string | `"127.0.0.1"` | `statsd` | StatsD server address |
 | `port` | integer | `8125` | `statsd` | StatsD server UDP port |
 | `metrics_interval_seconds` | integer | `15` | `prometheus`, `statsd` | Metric snapshot frequency |
-| `interval_seconds` | integer | `15` | `prometheus`, `statsd` | Alias for `metrics_interval_seconds` |
 | `metrics_prefix` | string | `"logcraft"` | `prometheus`, `statsd` | Metric name prefix |
-| `prefix` | string | `"logcraft"` | `prometheus`, `statsd` | Alias for `metrics_prefix` |
 | `channel` | string | `"coderoast.default"` | `insight_shm` | Shared-memory channel base name |
-| `slot_count` | integer | `8192` | `insight_shm` | Number of fixed-size slots per shard |
-| `max_payload_bytes` | integer | `4096` | `insight_shm` | Max payload bytes per slot |
-| `backpressure` | string | pipeline policy | `insight_shm` | `"block"` or `"drop"` (output-level override) |
+| `shm_slot_count` | integer | `8192` | `insight_shm` | Number of fixed-size slots per shard |
+| `shm_max_payload_bytes` | integer | `4096` | `insight_shm` | Max payload bytes per slot |
+| `shm_window_seal_interval_seconds` | number | `25.0` | `insight_shm` | Window seal cadence in seconds |
+| `shm_backpressure_policy` | string | pipeline policy | `insight_shm` | `"block"` or `"drop"` (output-level override) |
 
 ---
 
@@ -264,12 +251,12 @@ required and must contain at least one entry.
 agents:
   - name: api-gateway             # Required
     type: web_server              # Free-form label (metadata only)
-    rate: 100/s                   # Records per second
+    rate_per_second: 100/s                   # Records per second
     error_rate: 0.03              # Probability of ERROR-level log (0.0–1.0)
     log_level: info               # Base log level
     instances: 3                  # Run N copies (names become api-gateway-1, -2, -3)
-    start_after: 5s               # Delay before this agent starts
-    use: my_template              # Inherit defaults from a template
+    start_delay_seconds: 5s               # Delay before this agent starts
+    use_template: my_template              # Inherit defaults from a template
     message_template: "{method} {path} -> {status_code}"
     fields: [...]
     phases: [...]
@@ -282,15 +269,14 @@ agents:
 |-----|------|---------|-------------|
 | `name` | string | required | Unique identifier; expanded to `name-1`, `-2` when `instances > 1` |
 | `type` | string | `""` | Free-form label (e.g. `web_server`, `database`) |
-| `rate` | string | — | Records/s as `"200/s"` or numeric |
-| `rate_per_second` | number | `1.0` | Numeric fallback when `rate` absent |
+| `rate_per_second` | string/number | `1.0` | Records/s as a number or `"200/s"` string |
 | `log_level` | string | `"info"` | Default severity: `trace`, `debug`, `info`, `warn`, `error`, `fatal` |
 | `level_weights` | map | `{}` | Explicit level distribution weights (auto-normalized) |
 | `error_rate` | number | `0.0` | Global ERROR probability (0.0–1.0) |
 | `message_template` | string | `""` | Message string with `{field_name}` placeholders |
-| `use` | string | `""` | Template name to inherit from |
+| `use_template` | string | `""` | Template name to inherit from |
 | `instances` | integer | `1` | Number of parallel copies |
-| `start_after` | string/number | `0.0` | Startup delay (duration format) |
+| `start_delay_seconds` | string/number | `0.0` | Startup delay (duration format or seconds) |
 | `fields` | sequence | `[]` | Field definitions (see [Fields & Generators](#fields--generators)) |
 | `phases` | sequence | `[]` | Time-based behavior phases (see [Phases](#phases)) |
 | `latency_ms` | distribution | absent | Latency distribution (see [Latency](#latency)) |
@@ -303,7 +289,6 @@ agents:
 | `slow_queries` | map | absent | Probabilistic slow operations |
 | `availability` | map | absent | Uptime and failure mode |
 | `failures` | map | absent | Burst failure patterns |
-| `request_flow` | sequence | `[]` | Distributed call chain |
 | `contention` | map | absent | Connection pool limits |
 | `outputs` | sequence | `[]` | Route to specific named outputs (empty = all) |
 
@@ -534,22 +519,22 @@ Phases override an agent's rate, error rate, or latency for a set duration, in o
 ```yaml
 agents:
   - name: api-server
-    rate: 50/s
+    rate_per_second: 50/s
     phases:
       - name: warmup
-        duration: 30s
-        rate: 10/s
+        duration_seconds: 30s
+        rate_per_second: 10/s
         latency_ms: [5, 20]
       - name: steady
-        duration: 5m
-        rate: 50/s
+        duration_seconds: 5m
+        rate_per_second: 50/s
         latency_ms:
           distribution: normal
           mean: 25
           stddev: 8
       - name: peak
-        duration: 1m
-        rate: 150/s
+        duration_seconds: 1m
+        rate_per_second: 150/s
         error_rate: 0.08
         latency_ms:
           distribution: percentile
@@ -563,15 +548,13 @@ agents:
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `name` | string | required | Phase label |
-| `duration` | string/number | — | Phase duration (duration format); `0` = run forever |
-| `duration_seconds` | number | `0.0` | Numeric fallback for `duration` |
-| `rate` | string | — | Override agent rate for this phase |
-| `rate_per_second` | number | `0.0` | Numeric fallback for `rate` |
+| `duration_seconds` | string/number | `0.0` | Phase duration (duration format or seconds); `0` = run forever |
+| `rate_per_second` | string/number | `0.0` | Override agent rate for this phase |
 | `error_rate` | number | `0.0` | Override agent error rate for this phase (0.0–1.0) |
 | `latency_ms` | distribution | absent | Override agent latency for this phase |
 
 Phases run sequentially in order. When all phases complete, the agent continues at its
-base configuration (or the scenario ends if `duration` has elapsed).
+base configuration (or the scenario ends if `duration_seconds` has elapsed).
 
 ---
 
@@ -630,25 +613,25 @@ latency_ms:
 
 ## Templates
 
-Named presets that agents inherit via `use: template_name`. Agent values override
+Named presets that agents inherit via `use_template: template_name`. Agent values override
 template defaults. Templates can include any agent-level key.
 
 ```yaml
 templates:
   go_microservice:
-    rate: 100/s
+    rate_per_second: 100/s
     error_rate: 0.008
     latency_ms:
       distribution: normal
       mean: 12
       stddev: 5
   high_traffic:
-    rate: 1000/s
+    rate_per_second: 1000/s
     error_rate: 0.01
 
 agents:
   - name: user-service
-    use: go_microservice      # Inherits rate, error_rate, latency_ms
+    use_template: go_microservice      # Inherits rate, error_rate, latency_ms
     error_rate: 0.05          # Override: this takes precedence over template value
 ```
 
@@ -656,37 +639,94 @@ agents:
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `rate` / `rate_per_second` | string/number | Default rate |
+| `rate_per_second` | string/number | Default rate |
 | `error_rate` | number | Default error rate |
 | `latency_ms` | distribution | Default latency |
 | `fields` | sequence | Default field definitions |
 
 ---
 
-## Interactions
+## Causal Flows
 
-Declare the communication topology between agents. Used by auto-cascade and rules to
-determine propagation paths. `type:` is metadata only — it does not affect engine
-behavior.
+Causal flows model distributed traces/workflows as deterministic, **instanced** state
+machines. Each flow spawns new trace *instances* at `instance_rate_per_second`; an instance
+walks the state graph from `start`, emitting one record per visited state **through the bound
+agent (service)**, carrying a shared correlation id, until it reaches a state with no
+outgoing transition. This is the only construct that imposes a declared *order* on the event
+stream (rate-driven agents are unordered) — it is what gives a consumer a crisp causal /
+transition graph (e.g. InSight's `dominant_path`).
+
+Flows require **deterministic mode** (a scenario `seed`) and are ignored in real mode. Branch
+selection and step content are seeded per-instance, so the same scenario+seed replays
+bit-identically — adding a flow never shifts an agent's own content.
+
+> **Behavioral isolation — the `agent` binding is name + routing only.** A flow step
+> does **not** inherit the bound agent's dynamics: the agent's `error_rate`,
+> `latency_ms`, `phases`, `incidents`, `rules`, `effects`, `health_state`,
+> `level_overrides`, and `fields` have **no effect** on flow-step records. A step's
+> level/error comes only from the flow's per-step `level` / `error_rate`; its fields
+> only from the step's own `fields:`; its inter-step delay only from the transition's
+> `network_latency_ms` / `network_jitter_ms`. An incident that degrades the `payments`
+> agent does **not** degrade a `charge` step routed through it. Flow topology, weights,
+> and per-step rates are likewise **static for the entire run** — no phase, incident,
+> or rate-modulation changes them.
 
 ```yaml
-interactions:
-  - from: api-gateway
-    to: order-service
-    type: request
-  - from: order-service
-    to: postgres-primary
-    type: dependency
-  - from: order-service
-    to: redis-cache
-    type: cache_lookup
+flows:
+  - name: checkout
+    instance_rate_per_second: 50/s   # new trace instances per second
+    start_delay_seconds: 0           # when the flow begins spawning (duration format)
+    max_concurrent: 200              # cap in-flight instances (0 = unbounded; drop new on full)
+    correlation_field: trace_id      # field stamped on every step record of an instance
+    start: receive                   # initial state
+    states:                          # map: state-name -> step (emits 1 record via `agent`)
+      receive: { agent: nginx,    message_template: "GET /checkout" }
+      auth:    { agent: auth,     message_template: "verify {user}" }
+      charge:  { agent: payments, message_template: "charge {amount}" }
+      done:    { agent: nginx,    message_template: "200 checkout" }
+    transitions:                     # weighted edges; integer-ns inter-step delay
+      - { from: receive, to: auth,   network_latency_ms: 2 }
+      - { from: auth,    to: charge, weight: 0.98, network_latency_ms: 8 }
+      - { from: auth,    to: done,   weight: 0.02 }   # rare off-path branch
+      - { from: charge,  to: done,   network_latency_ms: 5 }
 ```
 
-| Key | Type | Required | Description |
-|-----|------|----------|-------------|
-| `from` | string | Yes | Calling agent name (validated post-parse) |
-| `to` | string | Yes | Called agent name (validated post-parse) |
-| `type` | string | No | Label: `request`, `dependency`, `query`, `cache_lookup`, etc. |
+### Flow Keys
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `name` | string | required | Flow name; also the correlation-id prefix (`name-<n>`) |
+| `instance_rate_per_second` | string/number | `1.0` | New trace instances spawned per second |
+| `start_delay_seconds` | string/number | `0` | Delay before spawning starts (duration format or seconds) |
+| `max_concurrent` | integer | `0` | Max in-flight instances; `0` = unbounded. On full, the new arrival is dropped |
+| `correlation_field` | string | `"trace_id"` | Field stamped on every step record of an instance |
+| `start` | string | required | Initial state name (must be a declared state) |
+| `states` | map | required | State name → step spec |
+| `transitions` | sequence | absent | Weighted directed edges between states |
+
+### Flow State Keys
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `agent` | string | required | Service the step logs through — **name/routing only; the agent's own `error_rate` / `latency` / `effects` / `fields` do not apply** (must be a declared agent) |
+| `message_template` | string | `""` | Message with `{field}` placeholders |
+| `level` | string | the agent's `log_level` | Per-step log level |
+| `error_rate` | number | `0` | Per-step probability the record is escalated to `error` level |
+| `fields` | sequence | absent | Step-local field generators (same shape as agent `fields`) |
+
+### Flow Transition Keys
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `from` | string | required | Source state (must be declared) |
+| `to` | string | required | Target state (must be declared) |
+| `weight` | number | `1.0` | Relative weight among a state's outgoing edges (normalized) |
+| `network_latency_ms` | number | `0.0` | Inter-step delay before the target step |
+| `network_jitter_ms` | number | `0.0` | Uniform ± jitter on the inter-step delay |
+
+A state with no outgoing transition terminates the instance. Fan-out (a step touching
+several services) is modeled as sequential states — one agent per state keeps the causal
+path a clean linear chain.
 
 ---
 
@@ -697,11 +737,11 @@ Condition expressions are evaluated by the engine; the loader passes them as str
 
 ```yaml
 rules:
-  - when: "postgres-primary.error_rate > 0.05"
+  - condition: "postgres-primary.error_rate > 0.05"
     propagate:
       to: order-service
       latency_multiplier: 3.0
-  - when: "order-service.error_rate > 0.1"
+  - condition: "order-service.error_rate > 0.1"
     propagate:
       to: api-gateway
       error_rate: 0.08
@@ -709,7 +749,7 @@ rules:
 
 | Key | Type | Required | Description |
 |-----|------|----------|-------------|
-| `when` | string | Yes | Condition expression (e.g. `"agent.metric > N"`) |
+| `condition` | string | Yes | Condition expression (e.g. `"agent.metric > N"`) |
 | `propagate.to` | string | Yes | Target agent name (validated post-parse) |
 | `propagate.latency_multiplier` | number | No | Multiply target's latency |
 | `propagate.error_rate` | number | No | Set target's error rate |
@@ -724,7 +764,7 @@ Time- or probability-triggered events that modify agent behavior for a duration.
 incidents:
   - name: database_overload
     trigger: "time > 5m"          # Fires once at the 5-minute mark
-    duration: 2m
+    duration_seconds: 2m
     effects:
       - target: postgres-primary
         latency_multiplier: 8.0
@@ -735,7 +775,7 @@ incidents:
 
   - name: random_spike
     trigger_probability: 0.003    # 0.3% chance per second; overrides trigger:
-    duration: 30s
+    duration_seconds: 30s
     effects:
       - target: cache-service
         latency_multiplier: 5.0
@@ -748,8 +788,7 @@ incidents:
 | `name` | string | required | Incident label |
 | `trigger` | string | `""` | Condition expression: `"time > Xm"` fires once at that time |
 | `trigger_probability` | number | `0.0` | Per-second fire probability (0–1); when non-zero, overrides `trigger:` |
-| `duration` | string/number | — | How long effects last; omit or `0` = permanent |
-| `duration_seconds` | number | `0.0` | Numeric fallback for `duration` |
+| `duration_seconds` | string/number | `0.0` | How long effects last (duration format or seconds); omit or `0` = permanent |
 | `effects` | sequence | `[]` | Agent modifications while incident is active |
 
 ### Incident Effect Keys
@@ -821,18 +860,18 @@ agents:
     state:
       queue_depth:
         initial: 0
-        max: 10000
+        max_value: 10000
         growth_per_request: 0.1
       cpu_load:
         initial: 0.2
-        max: 1.0
+        max_value: 1.0
         growth_per_request: 0.001
     effects:
-      - when: "queue_depth > 5000"
+      - condition: "queue_depth > 5000"
         latency_multiplier: 3.0
-      - when: "queue_depth > 8000"
+      - condition: "queue_depth > 8000"
         error_rate: 0.15
-      - when: "cpu_load > 0.9"
+      - condition: "cpu_load > 0.9"
         latency_multiplier: 5.0
         error_rate: 0.10
 ```
@@ -844,14 +883,14 @@ State variables are declared as a map, where each key is the variable name:
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `initial` | number | `0.0` | Starting value |
-| `max` | number | `1.0` | Upper bound (capped) |
+| `max_value` | number | `1.0` | Upper bound (capped) |
 | `growth_per_request` | number | `0.0` | Value increment per log event |
 
 ### Effect Keys
 
 | Key | Type | Required | Description |
 |-----|------|----------|-------------|
-| `when` | string | Yes | Condition expression (e.g. `"queue_depth > 5000"`) |
+| `condition` | string | Yes | Condition expression (e.g. `"queue_depth > 5000"`) |
 | `latency_multiplier` | number | No | Multiply latency when condition is true |
 | `error_rate` | number | No | Override error rate when condition is true |
 
@@ -910,7 +949,7 @@ Local hour calculation uses `time.timezone` and `time.offset_minutes`.
 ## Auto-Cascade
 
 Automatically propagates error and latency effects from failing agents to their
-dependents (declared via `interactions:` and `dependencies:`), without explicit rules.
+dependents (declared via `dependencies:`), without explicit rules.
 
 ```yaml
 auto_cascade:
@@ -1056,32 +1095,8 @@ log_format:
 
 ## System Archetypes
 
-System archetypes model production-grade service behavior patterns.
-
-### Request Flow
-
-Simulates distributed call chains with network latency and timeouts.
-
-```yaml
-agents:
-  - name: api-gateway
-    request_flow:
-      - call: auth-service
-        timeout_ms: 30
-        network_latency_ms: 2.0
-        network_jitter_ms: 0.5
-      - call: product-service
-        timeout_ms: 100
-```
-
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `call` | string | required | Target agent name (validated post-parse) |
-| `timeout_ms` | number | `0.0` | Request timeout; `0` = no timeout |
-| `network_latency_ms` | number | `0.0` | One-way base propagation delay |
-| `network_jitter_ms` | number | `0.0` | Uniform ±jitter on the base delay |
-
----
+System archetypes model production-grade service behavior patterns. (Distributed call
+chains with network latency are now modeled by [Causal Flows](#causal-flows).)
 
 ### Contention
 
@@ -1143,7 +1158,7 @@ failures:
   mode: burst
   trigger: latency_threshold
   threshold_ms: 500
-  duration: 30s
+  duration_seconds: 30s
   error_rate: 0.20
 ```
 
@@ -1152,8 +1167,7 @@ failures:
 | `mode` | string | `"burst"` | Failure pattern (`"burst"` is the only recognized value) |
 | `trigger` | string | `""` | Trigger condition expression |
 | `threshold_ms` | number | `0.0` | Latency threshold that activates the burst |
-| `duration` | string/number | — | How long the burst lasts |
-| `duration_seconds` | number | `0.0` | Numeric fallback for `duration` |
+| `duration_seconds` | string/number | `0.0` | How long the burst lasts (duration format or seconds) |
 | `error_rate` | number | `0.0` | Error rate injected during the failure |
 
 ---
@@ -1210,7 +1224,7 @@ includes:
 ```
 
 Paths are resolved relative to the including scenario file. Agents, templates,
-incidents, interactions, and rules are merged into the main config. Includes are
+incidents and rules are merged into the main config. Includes are
 processed recursively.
 
 ---
@@ -1243,7 +1257,7 @@ loader auto-configures it based on whether `seed:` is present.
 |-----|------|---------|-------------|
 | `mode` | string | `"real"` / `"virtual"` | `"real"` (auto-advance) or `"virtual"` (manual stepping). Deterministic mode requires `"virtual"`; real mode forbids it. |
 | `start_time_unix_ns` | int64 | `0` | Unix epoch nanoseconds; `0` = system time (real) or seed-derived (deterministic) |
-| `tick_duration` | string/number | `"1ms"` | Step size used by `SimulationClock::step()` (e.g. `"1ms"`, `"10us"`) |
+| `tick_duration_ns` | string/number | `"1ms"` | Step size used by `SimulationClock::step()` (duration string or seconds, e.g. `"1ms"`) |
 
 **Mode policy:**
 - `seed:` present → `clock.mode: virtual` is required (auto-created if absent)
@@ -1263,7 +1277,7 @@ High-performance sharded pipeline. Rarely needed unless tuning throughput.
 | `high_watermark` | number | `0.8` | High backpressure threshold fraction |
 | `min_batch` | integer | `16` | Minimum batch size for emission |
 | `max_batch` | integer | `256` | Maximum batch size for emission |
-| `backpressure` | string | `"drop"` | `"drop"` (maximize throughput) or `"block"` (no loss). Deterministic mode requires `"block"` (auto-set). |
+| `policy` | string | `"drop"` | `"drop"` (maximize throughput) or `"block"` (no loss). Deterministic mode requires `"block"` (auto-set). |
 
 ---
 

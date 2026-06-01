@@ -5,12 +5,12 @@
 
 scenario:
   name: modern-log-formats
-  duration: 2m
+  duration_seconds: 2m
 
   agents:
     - name: api-service
       type: microservice
-      rate: 10/s
+      rate_per_second: 10/s
       message_template: "Handled {method} {path} in {latency_ms}ms"
       fields:
         - name: method

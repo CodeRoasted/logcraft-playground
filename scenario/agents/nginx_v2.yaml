@@ -11,19 +11,19 @@ agent:
     p99: 250
   phases:
     - name: warmup
-      duration: 1m
-      rate: 50/s
+      duration_seconds: 1m
+      rate_per_second: 50/s
       latency_ms: [5, 20]
     - name: steady
-      duration: 5m
-      rate: 200/s
+      duration_seconds: 5m
+      rate_per_second: 200/s
       latency_ms:
         distribution: normal
         mean: 25
         stddev: 8
     - name: peak
-      duration: 3m
-      rate: 400/s
+      duration_seconds: 3m
+      rate_per_second: 400/s
       error_rate: 0.03
       latency_ms:
         distribution: percentile

@@ -3,7 +3,7 @@
 # Concepts: multiple agents, error_rate, interactions, range generator
 scenario:
   name: two-agents
-  duration: 2m
+  duration_seconds: 2m
 
   outputs:
     - name: console
@@ -13,7 +13,7 @@ scenario:
   agents:
     - name: web-server
       type: web_server
-      rate: 3/s
+      rate_per_second: 3/s
       error_rate: 0.03
       message_template: "{method} {path} -> {status_code}"
       fields:
@@ -31,7 +31,7 @@ scenario:
 
     - name: database
       type: database
-      rate: 5/s
+      rate_per_second: 5/s
       error_rate: 0.01
       message_template: "{query} on {table} -> {row_count} rows"
       fields:
@@ -48,7 +48,3 @@ scenario:
           max: 200
           integer: true
 
-  interactions:
-    - from: web-server
-      to: database
-      type: dependency

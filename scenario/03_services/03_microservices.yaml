@@ -4,11 +4,11 @@
 
 scenario:
   name: microservice-mesh
-  duration: 10m
+  duration_seconds: 10m
 
   templates:
     go_api:
-      rate: 100/s
+      rate_per_second: 100/s
       error_rate: 0.008
       latency_ms:
         distribution: percentile
@@ -27,17 +27,10 @@ scenario:
           - {from: 3, to: 0, probability: 0.10}   # recovering → healthy
           - {from: 3, to: 2, probability: 0.02}   # recovering → relapse
 
-  interactions:
-    - {from: api-gateway, to: user-service, type: request}
-    - {from: api-gateway, to: order-service, type: request}
-    - {from: order-service, to: inventory-service, type: dependency}
-    - {from: order-service, to: notification-service, type: request}
-    - {from: user-service, to: auth-service, type: dependency}
-
   agents:
     - name: api-gateway
-      use: go_api
-      rate: 300/s
+      use_template: go_api
+      rate_per_second: 300/s
       message_template: "{method} {path} -> {status_code}"
       fields:
         - name: method
@@ -53,7 +46,7 @@ scenario:
           weights: [80, 10, 7, 3]
 
     - name: user-service
-      use: go_api
+      use_template: go_api
       message_template: "user {user_id}: {action}"
       fields:
         - name: user_id
@@ -67,8 +60,8 @@ scenario:
           weights: [70, 20, 8, 2]
 
     - name: order-service
-      use: go_api
-      rate: 80/s
+      use_template: go_api
+      rate_per_second: 80/s
       message_template: "order {order_id}: {action}"
       fields:
         - name: order_id
@@ -80,8 +73,8 @@ scenario:
           weights: [30, 50, 15, 5]
 
     - name: inventory-service
-      use: go_api
-      rate: 60/s
+      use_template: go_api
+      rate_per_second: 60/s
       message_template: "sku={sku} qty={qty} action={action}"
       fields:
         - name: sku
@@ -98,8 +91,8 @@ scenario:
           weights: [40, 30, 20, 10]
 
     - name: notification-service
-      use: go_api
-      rate: 20/s
+      use_template: go_api
+      rate_per_second: 20/s
       message_template: "notification type={type} channel={channel} status={status}"
       fields:
         - name: type
@@ -116,8 +109,8 @@ scenario:
           weights: [92, 5, 3]
 
     - name: auth-service
-      use: go_api
-      rate: 150/s
+      use_template: go_api
+      rate_per_second: 150/s
       message_template: "auth {action} user={user_id} result={result}"
       fields:
         - name: action

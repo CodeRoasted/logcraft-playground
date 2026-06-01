@@ -3,7 +3,7 @@
 # Concepts: agent, rate, fields, weighted_choice, choice
 scenario:
   name: hello-logcraft
-  duration: 2m
+  duration_seconds: 2m
 
   outputs:
     - name: console
@@ -13,7 +13,7 @@ scenario:
   agents:
     - name: app
       type: web_server
-      rate: 2/s
+      rate_per_second: 2/s
       message_template: "{method} {path} -> {status_code}"
       fields:
         - name: method

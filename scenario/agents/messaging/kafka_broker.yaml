@@ -2,7 +2,7 @@
 agent:
   name: kafka-broker
   type: message_queue
-  rate: 500/s
+  rate_per_second: 500/s
   error_rate: 0.002
   contention:
     max_connections: 500

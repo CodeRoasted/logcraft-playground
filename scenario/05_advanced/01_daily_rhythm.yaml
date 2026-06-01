@@ -5,12 +5,12 @@
 
 scenario:
   name: daily-rhythm
-  duration: 0    # run until stopped; set to 86400s to simulate a full day
+  duration_seconds: 0    # run until stopped; set to 86400s to simulate a full day
 
   agents:
     - name: web-api
       type: web_server
-      rate: 500/s    # peak rate — business_hours multiplier scales this down off-peak
+      rate_per_second: 500/s    # peak rate — business_hours multiplier scales this down off-peak
       error_rate: 0.01
       latency_ms:
         distribution: percentile
@@ -39,7 +39,7 @@ scenario:
 
     - name: batch-processor
       type: worker
-      rate: 20/s
+      rate_per_second: 20/s
       error_rate: 0.005
       # ETL and archive jobs are busy at night, quiet during business hours
       rate_modulation:

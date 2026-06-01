@@ -3,7 +3,7 @@
 agent:
   name: simple-web
   type: web_server
-  rate: 10/s
+  rate_per_second: 10/s
   message_template: "{method} {path} -> {status_code}"
   fields:
     - name: method
