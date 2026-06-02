@@ -6,3 +6,8 @@
 # OS files
 .DS_Store
 .directory
+
+# Environment files (secrets)
+.env
+.env.local
+.env.*.local
