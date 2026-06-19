@@ -660,16 +660,35 @@ Flows require **deterministic mode** (a scenario `seed`) and are ignored in real
 selection and step content are seeded per-instance, so the same scenario+seed replays
 bit-identically — adding a flow never shifts an agent's own content.
 
-> **Behavioral isolation — the `agent` binding is name + routing only.** A flow step
-> does **not** inherit the bound agent's dynamics: the agent's `error_rate`,
-> `latency_ms`, `phases`, `incidents`, `rules`, `effects`, `health_state`,
-> `level_overrides`, and `fields` have **no effect** on flow-step records. A step's
-> level/error comes only from the flow's per-step `level` / `error_rate`; its fields
-> only from the step's own `fields:`; its inter-step delay only from the transition's
-> `network_latency_ms` / `network_jitter_ms`. An incident that degrades the `payments`
-> agent does **not** degrade a `charge` step routed through it. Flow topology, weights,
-> and per-step rates are likewise **static for the entire run** — no phase, incident,
-> or rate-modulation changes them.
+> **Agent-envelope inheritance (A1).** A flow step **inherits the bound agent's
+> deterministic effective envelope** — its `error_rate` and `latency` at the step's
+> emission sim-time — composed from the agent's `phases` and its **deterministic
+> (offset-triggered) `incidents`** (`trigger: "time > Xs"`). So an incident that
+> degrades the `payments` agent **does** degrade a step routed through it, for the
+> incident's window — the canonical *"service X degrades → every trace through X
+> degrades"* signal.
+>
+> **Precedence — explicit > inherited > default.** An **explicit** per-step `level` /
+> `error_rate` **overrides** the inherited value (absent → inherit). The explicit value
+> (including `error_rate: 0`) is the escape hatch back to isolation. A step's
+> **structural identity is always its own** — `message_template` and `fields` are the
+> step's; the `agent` is name/routing only for them. Its inter-step delay is still only
+> the transition's `network_latency_ms` / `network_jitter_ms`.
+>
+> **Does NOT inherit (today).** The agent's **stochastic** dynamics — `health_state`,
+> latency-threshold failure bursts, and **probability-triggered** incidents
+> (`trigger_probability`) — and `rules` / `effects` / cascade have **no effect** on
+> flow-step records. They are path-dependent on the agent's own RNG trajectory;
+> inheriting them would cross the two seeded streams. Flow **topology** and `weights`
+> likewise remain **static for the run**.
+>
+> **Determinism (the rule that makes inheritance safe).** The step reads only the
+> agent's deterministic *parameter* `f(seed, T)` from immutable config — never the
+> agent's live atomics — and draws its own outcome from the **flow instance's seeded
+> stream** (`instance.rng`), never the agent's. The two streams never cross and the
+> flow is **read-only** on the agent: adding a flow, or removing the incident it reads,
+> never shifts the agent's own records (intervention-stable, the cube do-operator's
+> minimal-intervention property).
 
 ```yaml
 flows:
@@ -708,10 +727,10 @@ flows:
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `agent` | string | required | Service the step logs through — **name/routing only; the agent's own `error_rate` / `latency` / `effects` / `fields` do not apply** (must be a declared agent) |
-| `message_template` | string | `""` | Message with `{field}` placeholders |
-| `level` | string | the agent's `log_level` | Per-step log level |
-| `error_rate` | number | `0` | Per-step probability the record is escalated to `error` level |
+| `agent` | string | required | Service the step logs through. Its **deterministic envelope (`error_rate` / `latency` from phases + deterministic incidents) is inherited** (A1); its `message_template` / `fields` and stochastic dynamics (`health_state`, bursts, `trigger_probability`, `effects`) are **not**. Must be a declared agent |
+| `message_template` | string | `""` | Message with `{field}` placeholders (always the step's own — never inherited) |
+| `level` | string | the agent's `log_level` | Per-step base log level; an explicit value **overrides** any inherited escalation |
+| `error_rate` | number | inherit | Per-step probability the record is escalated to `error`. Absent → **inherited** from the agent's effective envelope (A1); an explicit value (incl. `0`) **overrides** — the isolation escape hatch |
 | `fields` | sequence | absent | Step-local field generators (same shape as agent `fields`) |
 
 ### Flow Transition Keys
