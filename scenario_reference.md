@@ -1,8 +1,10 @@
 # LogCraft Scenario Reference
 
 Complete, source-derived reference for every configuration key in a LogCraft scenario
-file. Generated from direct source-code audit of `scenario_loader.cpp`, `config.hpp`,
-`capability_keys.hpp`, and `field_generator.cpp`. This is the single source of truth;
+file. Generated from direct source-code audit of the scenario parsers
+(`scenario_loader.cpp`, `scenario_*_parsing.cpp`, `scenario_validation.cpp`), the config
+and capability modules (`core.api-agent.cppm`, `core.api-scenario.cppm`), and
+`field_generator.cpp`. This is the single source of truth;
 `logcraft/technical_docs/reference/scenario_reference.md` redirects here.
 
 All scenarios are defined in YAML under a top-level `scenario:` key. These scenarios are
@@ -208,6 +210,8 @@ Every output except `prometheus` and `statsd` requires a `format:` (or `formats:
 | `iis_w3c` | `iis` | IIS W3C Extended log |
 | `ecs` | — | Elastic Common Schema 8.x |
 | `otel` | `opentelemetry`, `otlp` | OpenTelemetry OTLP JSON |
+| `github_actions` | `gha` | Timestamped line with a GitHub Actions workflow-command prefix (`::error::` / `::warning::`; empty for info/trace) — the surface Sift annotates from |
+| `raw` | `messy`, `stdout` | Unstructured `LEVEL message field=value` line — CI/app-stdout "dirty logs" the structured formats never exercise |
 
 When `formats:` (sequence) is set it overrides `format:` (single string), allowing one
 sink to write multiple formats to the same path prefix.
@@ -718,6 +722,7 @@ flows:
 | `instance_rate_per_second` | string/number | `1.0` | New trace instances spawned per second |
 | `start_delay_seconds` | string/number | `0` | Delay before spawning starts (duration format or seconds) |
 | `max_concurrent` | integer | `0` | Max in-flight instances; `0` = unbounded. On full, the new arrival is dropped |
+| `max_steps` | integer | `10000` | Per-instance termination guard: an instance emits at most this many step records, then terminates. Must be ≥ 1 — it bounds a walk over a cyclic state graph so a flow always terminates |
 | `correlation_field` | string | `"trace_id"` | Field stamped on every step record of an instance |
 | `start` | string | required | Initial state name (must be a declared state) |
 | `states` | map | required | State name → step spec |
@@ -1001,7 +1006,7 @@ noise:
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `log_duplication_rate` | number | `0.0` | Per-log probability of emitting twice (0.0–1.0) |
+| `log_duplication_rate` | number | `0.0` | Per-log probability of emitting the same record twice. The duplicate is byte-identical (same timestamp and content, its own transport sequence index) and draws no RNG, so it is deterministic and works on the `seed:` replay path as well as live mode |
 | `missing_fields_rate` | number | `0.0` | Per-field probability of omission (0.0–1.0) |
 | `random_delay_ms` | [min, max] | `[0, 0]` | Uniform delay range added to each record |
 
@@ -1198,7 +1203,6 @@ referenced by name (and optionally version) with optional overrides.
 
 ```yaml
 registry:
-  sources: [agents/]           # Directories to scan for agent YAML files
   nginx:
     v1: agents/nginx_v1.yaml
     v2: agents/nginx_v2.yaml
@@ -1219,7 +1223,6 @@ registry:
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `sources` | sequence | Directories to scan for `.yaml` agent files |
 | `<agent_name>` | string | File path to agent YAML (simple form) |
 | `<agent_name>` | map | Map of version → file path (versioned form) |
 | `agents` | sequence | Agent instances to create from the registry |
