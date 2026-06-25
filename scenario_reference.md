@@ -134,12 +134,23 @@ rate_per_second: 200/s   # string form ("N/s")
 rate_per_second: 200     # plain number (records per second)
 ```
 
-`rate_per_second: 0` **silences the agent** — it emits no records (the `<= 0`
-emission guard), while the agent stays alive and can be raised again later. Use it
-to model a **flow-only service** (the agent exists only so a flow can log *through*
-it — no `start_delay` hack needed) or, in a `phases:` entry, to make an agent go
-quiet at a sim-time boundary (vanish-a-template-at-T). A phase that **sets**
-`rate_per_second: 0` silences; a phase that **omits** the key keeps the current rate.
+`rate_per_second: 0` is **silence** — a first-class state, **never** a fallback to
+`1/s`. The agent emits **no records** while staying alive and re-armable. It is
+honored everywhere a rate is read, **including the first phase from `t = 0`**:
+
+- A **not-yet-deployed service** — `phases:` whose **phase 0** sets `rate_per_second: 0`
+  and a later phase raises it — is silent from the start and begins emitting only when
+  it "deploys". (This is honored from `t = 0`; a phase-0 silence is applied at agent
+  start, not skipped.)
+- An agent or a **later** phase set to `0` goes quiet at that sim-time boundary
+  (vanish-a-template-at-T).
+- A **flow-only service** — the agent exists only so a `flows:` trace can log *through*
+  it (no `start_delay` hack) — and silencing background agents so a flow spine is the
+  only stream.
+
+**Set vs omit (absent ≠ 0):** a phase that **sets** `rate_per_second: 0` silences; a
+phase that **omits** the key keeps the current rate. The per-field default (agent
+`1.0`, phase inherits) applies only when the key is **absent**, never to an explicit `0`.
 
 ---
 
