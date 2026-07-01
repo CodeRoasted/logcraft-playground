@@ -884,6 +884,45 @@ flows:
 > + `DiscreteDist` over the *reshaped* weight vector (LogCraft's certified strict-float regime; no new float
 > path, symmetric to `field_weight_ramps`). Same scenario + seed replays bit-identically.
 
+### Flow field weight ramps — a field drift on the flow spine
+
+A flow-level `field_weight_ramps` drifts a **flow STATE's** `weighted_choice` field value-distribution over
+sim-time — the continuous ([`field_weight_ramps`](#distribution-drift-ramps))-style sibling that lives on the
+flow instead of an agent phase. Its purpose is co-location: a single flow can carry BOTH a `field_weight_ramp`
+(a *distributional* drift → a DISJOINT `FieldDrift` on the flow's own template) AND a `branch_weight_ramp` (a
+*structural* `BranchingShift` on the same template) — because a flow's records are trace-scoped, both signals
+stay clean (no rate-agent self-succession diluting them). It interpolates base→`target_weights` over
+`[start_seconds, start_seconds + duration_seconds]` in per-window quanta; before `start_seconds` the base
+weights stand. FIXED support (reweights declared values only).
+
+```yaml
+flows:
+  - name: walk
+    start: process
+    states:
+      process: { agent: svc, message_template: "request bucket {bucket} processed",
+                 fields: [ { name: bucket, generator: weighted_choice, values: ["10","90"], weights: [1.0, 0.0] } ] }
+    field_weight_ramps:
+      - state: process          # the flow state whose field drifts
+        field: bucket           # a weighted_choice field on that state
+        target_weights: [0.0, 1.0]
+        start_seconds: 550s     # stationary before this (seeds a DISJOINT far block)
+        duration_seconds: 1500s
+        window_seconds: 25
+```
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `field_weight_ramps[].state` | string | required | The flow state whose field drifts (must be a declared state) |
+| `field_weight_ramps[].field` | string | required | A `weighted_choice` field on that state |
+| `field_weight_ramps[].target_weights` | sequence | required | `w_end` over the field's fixed value support (length = the field's `values`) |
+| `field_weight_ramps[].start_seconds` | number/string | `0` | Sim-time the ramp begins (base weights before it) |
+| `field_weight_ramps[].duration_seconds` | number/string | `0` | Ramp span; interpolate over `[start, start+duration]` |
+| `field_weight_ramps[].window_seconds` | number | `25` | Quantum the ramp advances in (align with the consuming InSight window) |
+
+> **Determinism.** Integer-ns window quantum + contraction-off double interpolation + the existing per-instance
+> draw — LogCraft's certified strict-float regime, symmetric to the agent `field_weight_ramps`.
+
 ---
 
 ## Rules
